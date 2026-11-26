@@ -62,6 +62,8 @@ surface=web
 
 `surface=web` 会启用 4 条只对 Web 服务有意义的规则。没有配置文件时用默认值（`src`、cli）。
 
+Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recursive=true` 递归扫描。扫描到 0 个源码文件会报 FAIL（规则是 `config.no-sources`），不会给你一个假的 PASS。这个判定不能被 baseline 冻结。
+
 ## 它检查什么
 
 | 规则 | 检测什么 | 适用 |
@@ -164,5 +166,6 @@ cargo run --locked -- cases .
 
 ## 其他文档
 
+- `BENCHMARK.md` — 在真实项目上的扫描结果，以及发现的局限
 - `CASES.md` — 案例库的贡献格式
 - `CHANGELOG.md` — 各轮迭代做过什么

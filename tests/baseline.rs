@@ -69,8 +69,9 @@ fn baseline_is_shrink_only_when_issue_disappears() {
     write_issue(&dir, "app.rs", "rls=off");
     gate::write_baseline(&dir).unwrap();
 
-    // Remove the issue: gate still passes, and re-baseline shrinks to zero.
-    fs::remove_file(dir.join("src/app.rs")).unwrap();
+    // Remove the issue but keep a clean source file: an empty project would
+    // now fail with config.no-sources, which is a different condition.
+    fs::write(dir.join("src/app.rs"), "fn main() {}\n").unwrap();
     let after = gate::run_gate(&dir);
     assert!(after.passed());
     assert!(!after.findings.iter().any(|f| f.verdict == Verdict::Baseline));

@@ -8,6 +8,10 @@ use std::path::Path;
 
 const BASELINE_FILE: &str = ".prodgate/baseline.txt";
 
+/// Synthetic rule id for a scan that matched no source files. Kept separate
+/// from the real rule set so baseline cannot freeze a misconfiguration.
+const NO_SOURCES_RULE: &str = "config.no-sources";
+
 /// Stable identity of a finding. Deliberately excludes the note text: an issue
 /// stays the same issue when its description is reworded.
 fn fingerprint(f: &Finding) -> String {
@@ -38,7 +42,7 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
     let issues: Vec<String> = report
         .findings
         .iter()
-        .filter(|f| f.verdict == Verdict::Fail)
+        .filter(|f| f.verdict == Verdict::Fail && f.id != NO_SOURCES_RULE)
         .map(fingerprint)
         .collect();
 
@@ -59,6 +63,8 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
 pub struct Config {
     pub roots: Vec<String>,
     pub surface: String,
+    /// Scan every source file under each root, including nested crates.
+    pub recursive: bool,
 }
 
 impl Default for Config {
@@ -66,9 +72,16 @@ impl Default for Config {
         Self {
             roots: vec!["src".into()],
             surface: "cli".into(),
+            recursive: false,
         }
     }
 }
+
+/// Directories that never contain hand-written source code worth scanning.
+const SKIP_DIRS: &[&str] = &[
+    "target", "node_modules", ".git", ".venv", "venv", "dist", "build",
+    "__pycache__", ".idea", ".vscode", "coverage", "vendor",
+];
 
 pub fn load_config(root: &Path) -> Config {
     let mut cfg = Config::default();
@@ -89,6 +102,7 @@ pub fn load_config(root: &Path) -> Config {
                             .collect();
                     }
                     "surface" => cfg.surface = v.trim().to_string(),
+                    "recursive" => cfg.recursive = matches!(v.trim(), "true" | "1" | "yes"),
                     _ => {}
                 }
             }
@@ -97,26 +111,51 @@ pub fn load_config(root: &Path) -> Config {
     cfg
 }
 
-fn collect_sources(root: &Path, roots: &[String]) -> Vec<SourceFile> {
+fn push_if_source(root: &Path, path: &Path, out: &mut Vec<SourceFile>) {
+    if !path.is_file() {
+        return;
+    }
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string();
+    if Language::for_path(&rel) == Language::Unknown {
+        return;
+    }
+    if let Ok(src) = fs::read_to_string(path) {
+        out.push(SourceFile::new(rel, src));
+    }
+}
+
+fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<SourceFile>) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if SKIP_DIRS.contains(&name.as_str()) || name.starts_with('.') {
+                continue;
+            }
+            walk_dir(root, &path, out);
+        } else {
+            push_if_source(root, &path, out);
+        }
+    }
+}
+
+fn collect_sources(root: &Path, cfg: &Config) -> Vec<SourceFile> {
     let mut out = Vec::new();
-    for r in roots {
+    for r in &cfg.roots {
         let dir = root.join(r);
-        let Ok(entries) = fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
+        if cfg.recursive {
+            if dir.is_dir() {
+                walk_dir(root, &dir, &mut out);
             }
-            let rel = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .to_string();
-            if Language::for_path(&rel) == Language::Unknown {
-                continue;
-            }
-            if let Ok(src) = fs::read_to_string(&path) {
-                out.push(SourceFile::new(rel, src));
+        } else {
+            let Ok(entries) = fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                push_if_source(root, &entry.path(), &mut out);
             }
         }
     }
@@ -140,7 +179,27 @@ impl GateReport {
 /// the raw issues rather than the already-masked set.
 fn run_gate_raw(root: &Path) -> GateReport {
     let cfg = load_config(root);
-    let sources = collect_sources(root, &cfg.roots);
+    let sources = collect_sources(root, &cfg);
+
+    // Zero source files is a configuration failure, not a clean result.
+    // Without this, a wrong `roots` value makes every rule report PASS and
+    // the gate hands out a false green light.
+    if sources.is_empty() {
+        return GateReport {
+            findings: vec![Finding {
+                id: NO_SOURCES_RULE,
+                verdict: Verdict::Fail,
+                evidence: "-".into(),
+                note: format!(
+                    "no source files found under roots=[{}]; check prodgate.conf (surface={})",
+                    cfg.roots.join(", "),
+                    cfg.surface
+                ),
+            }],
+            files_scanned: 0,
+        };
+    }
+
     let ctx = RuleCtx {
         surface: &cfg.surface,
     };
@@ -195,6 +254,11 @@ pub fn run_gate(root: &Path) -> GateReport {
     let baseline = load_baseline(root);
     let mut report = run_gate_raw(root);
     for f in &mut report.findings {
+        // A misconfiguration must always block, even if someone manually
+        // writes its fingerprint into the baseline file.
+        if f.id == NO_SOURCES_RULE {
+            continue;
+        }
         if f.verdict == Verdict::Fail && baseline.contains(&fingerprint(f)) {
             f.verdict = Verdict::Baseline;
             f.note = format!("known issue in baseline: {}", f.note);
