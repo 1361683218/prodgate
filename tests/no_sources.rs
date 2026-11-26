@@ -41,7 +41,7 @@ fn no_sources_finding_cannot_be_baselined() {
     fs::write(dir.join("prodgate.conf"), "roots=missing\nsurface=web\n").unwrap();
 
     // Even with the synthetic fingerprint manually present in baseline, the
-    // gate must still fail. A misconfiguration is never "known debt".
+    // gate must still fail. A misconfiguration is never a known issue.
     let baseline_dir = dir.join(".prodgate");
     fs::create_dir_all(&baseline_dir).unwrap();
     fs::write(
