@@ -110,24 +110,58 @@ backup 立刻 FAIL。`cargo test` 8/8，clippy 干净，自举 PASS。
 验证：`cargo test` 12/12、clippy 干净、cases 3 个 0 invalid（2 个 upstream）、
 回放 PASS、自举 PASS。**五轮迭代全部完成，内核稳定。**
 
-## 接入层（内核稳定后可加，不改规则）
+## 接入层
 
 MCP 不是产品，是接入方式。内核 `run_gate` / `replay` 形态无关：
-- **CLI ✅** — 已实现，退出码 0/1 直接挂 CI
-- **MCP** — 把同一个内核包一层 stdio / JSON-RPC，让 AI 生成代码时实时自查
-- **git hook** — pre-commit 本地检查
+- **CLI ✅** — 退出码 0/1 直接挂 CI
+- **MCP ✅** — stdio / JSON-RPC，让 AI 写代码时实时自查
+- **git hook** — pre-commit 本地检查（未做）
 
-先做 CLI 是因为它能立刻验证内核；MCP 只是几十行包装，内核稳定后再加才有意义。
+MCP 与 CLI 共用同一个内核，没有任何检测逻辑在 MCP 层重写。
+
+## MCP Server
+
+编译后得到第二个二进制 `prodgate-mcp`。在 MCP 客户端配置里注册：
+
+```json
+{
+  "mcpServers": {
+    "prodgate": {
+      "command": "/绝对路径/prodgate/target/debug/prodgate-mcp"
+    }
+  }
+}
+```
+
+四个工具，全部只读：
+
+| 工具 | 何时调用 | 作用 |
+|---|---|---|
+| `prodgate_rules` | **写代码之前** | 列出 7 条控制，前馈——让 agent 一开始就知道要加什么 |
+| `prodgate_gate` | 写完代码之后 | 扫描项目，每条规则给 PASS/FAIL/NOT-ASSESSED + 证据行号 |
+| `prodgate_replay` | 改过规则之后 | 验证规则仍能区分 good/bad 样本 |
+| `prodgate_cases` | 加过案例之后 | 验证案例库来源与回放 |
+
+**两个刻意的设计决定：**
+
+1. **不暴露 `baseline`。** 冻结欠债是人的决定，不是 agent 的决定。
+   让 agent 能调 baseline，等于给它一个把 FAIL 变成 PASS 的橡皮图章。
+2. **不存在的路径返回错误，不返回 PASS。** `run_gate` 扫 0 个文件时会全 PASS；
+   如果 agent 拼错路径就会误报成功。MCP 层在任何扫描前先验证 root 是存在的目录。
+
+FAIL 时工具返回 `isError: true`，让 agent 明确知道需要修复；NOT-ASSESSED 不算错误。
 
 ## 用法
 
 ```bash
-cargo build --offline
-./target/debug/prodgate replay   # 规则有效性
-./target/debug/prodgate gate     # 扫当前仓库（baseline 已应用）
-./target/debug/prodgate baseline # 冻结当前 FAIL 为已知欠债
-./target/debug/prodgate cases    # 验证案例库来源与回放
-./target/debug/prodgate all      # 回放+门禁，自举验证
+cargo build --offline                    # 同时产出 prodgate 和 prodgate-mcp
+./target/debug/prodgate replay           # 规则有效性
+./target/debug/prodgate gate             # 扫当前仓库（baseline 已应用）
+./target/debug/prodgate baseline         # 冻结当前 FAIL 为已知欠债
+./target/debug/prodgate cases            # 验证案例库来源与回放
+./target/debug/prodgate all              # 回放+门禁，自举验证
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+  | ./target/debug/prodgate-mcp          # MCP 冒烟测试
 ```
 
 扫别的项目：`./target/debug/prodgate gate /path/to/project`

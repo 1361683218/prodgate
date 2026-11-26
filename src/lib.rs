@@ -13,3 +13,5 @@ pub mod cases;
 pub mod check;
 pub mod fixture;
 pub mod gate;
+pub mod json;
+pub mod mcp;
