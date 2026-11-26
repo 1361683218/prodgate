@@ -1,0 +1,9 @@
+[package]
+name = "prodgate"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal production-readiness gate with self-replay"
+
+[dependencies]
+
+[dev-dependencies]

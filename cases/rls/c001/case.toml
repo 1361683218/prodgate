@@ -1,0 +1,7 @@
+id = "rls/c001"
+rule = "rls"
+title = "RBAC tables created without enabling row level security"
+source = "supabase/supabase@49bda396bbd04710ce83b4db08a1a69aa7c1f94b"
+source_url = "https://github.com/supabase/supabase/commit/49bda396bbd04710ce83b4db08a1a69aa7c1f94b"
+contributor = "upstream"
+note = "Real security footgun from PR #48394: tables deciding authorization were readable AND writable by any signed-in user because RLS was never enabled."

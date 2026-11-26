@@ -1,0 +1,7 @@
+id = "cors.wildcard/c001"
+rule = "cors.wildcard"
+title = "Wildcard origin skips Vary: origin header"
+source = "expressjs/cors@a14f3bca9c715dc69268fbf823af4b02e044703c"
+source_url = "https://github.com/expressjs/cors/commit/a14f3bca9c715dc69268fbf823af4b02e044703c"
+contributor = "upstream"
+note = "Real fix from PR #39: default origin '*' wrongly added Vary: origin. The bad side uses the unpatched condition."

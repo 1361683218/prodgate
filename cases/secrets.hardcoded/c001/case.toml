@@ -1,0 +1,7 @@
+id = "secrets.hardcoded/c001"
+rule = "secrets.hardcoded"
+title = "Live API key literal assigned in source"
+source = "synthetic"
+source_url = ""
+contributor = "maintainer"
+note = "Synthetic case. No real commit sourced yet — verification must report this as unverified, not pass it off as upstream."
