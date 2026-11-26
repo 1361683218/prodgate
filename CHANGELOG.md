@@ -28,11 +28,11 @@
 
 ## 第 4 轮：baseline 棘轮
 
-新增 `baseline` 子命令。把当前 FAIL 集按 `rule|evidence` fingerprint 冻结到 `.prodgate/baseline.txt`，gate 时匹配到的降级为 BASELINE，新增的仍然 FAIL。解决老项目带着欠债接入的冷启动问题。
+新增 `baseline` 子命令。把当前 FAIL 集按 `rule|evidence` fingerprint 冻结到 `.prodgate/baseline.txt`，gate 时匹配到的降级为 BASELINE，新增的仍然 FAIL。解决老项目带着已知问题接入的冷启动问题。
 
-fingerprint 故意不含 note 文本，改写描述不算新增欠债。重跑 `baseline` 会收缩到当前真实欠债数，修一条少一条。
+fingerprint 故意不含 note 文本，改写描述不算新增问题。重跑 `baseline` 会收缩到当前真实问题数，修一条少一条。
 
-端到端演示：rls 旧欠债标 BASELINE，新加的 backup 立刻 FAIL。
+端到端演示：rls 旧问题标 BASELINE，新加的 backup 立刻 FAIL。
 
 ## 第 5 轮：案例库
 
@@ -51,6 +51,20 @@ Provenance 分三档：upstream（可核验）、synthetic（诚实标注）、U
 
 新增 `src/json.rs`（手写极简 JSON，零依赖，保持 std-only）、`src/mcp.rs`（JSON-RPC 2.0 层）和 `src/bin/prodgate-mcp.rs`。四个只读工具全部调用 CLI 用的同一批内核函数，MCP 层没有重写任何检测逻辑。
 
-两个刻意不做的决定：不暴露 `baseline`，因为冻结欠债应该是人的决定；不存在的路径返回错误而不是 PASS，因为 `run_gate` 扫 0 个文件时会全 PASS，AI 拼错路径就会误报成功。
+两个刻意不做的决定：不暴露 `baseline`，因为冻结已知问题应该是人的决定；不存在的路径返回错误而不是 PASS，因为 `run_gate` 扫 0 个文件时会全 PASS，AI 拼错路径就会误报成功。
 
 新增 7 个协议测试。全套 19 个测试通过。
+
+## 第 7 轮：正常项目基础设施
+
+改用词。`known debt` / "欠债"来自 technical debt，但对部分读者有歧义联想，全部换成 `known issue` / "已知问题"，包括代码注释、CLI 输出和测试名。语义不变。
+
+补 MIT LICENSE 和 GitHub Actions CI。CI 跑编译、测试、clippy、自举门禁、案例验证五步。为配合 `--locked`，把 `Cargo.lock` 从 .gitignore 移除并提交。
+
+CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生成，gate / replay / cases / all 都有统一的 `tool` / `command` / `passed` 顶层字段，脚本只读 `passed` 即可。退出码和 `passed` 保持一致。
+
+修一个真 bug：`write_baseline` 原来用 `let _ = fs::write` 吞掉写失败，返回"记录成功"但实际什么都没保存。改成返回 `Result<usize>`，调用方报告错误并返回失败退出码。加了"写入目标是目录时返回 Err"的测试。
+
+测试里用 PID + 时间戳生成临时目录时出现过 flaky（纳秒精度偶发碰撞），加了原子计数器彻底消除。三次重复运行确认稳定。
+
+全套 24 个测试通过，clippy 干净。

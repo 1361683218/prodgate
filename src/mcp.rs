@@ -4,7 +4,7 @@
 //! logic of its own; every tool calls the same functions the CLI uses. If the
 //! CLI and MCP ever disagree, that is a bug in this file, not in a rule.
 //!
-//! Deliberately NOT exposed: `baseline`. Letting an agent freeze debt would
+//! Deliberately NOT exposed: `baseline`. Letting an agent freeze known issues would
 //! turn a gate into a rubber stamp.
 
 use crate::json::Json;
@@ -268,7 +268,7 @@ fn call_gate(root: &Path) -> ToolResult {
         .filter(|f| f.verdict == check::Verdict::Baseline)
         .count();
     text.push_str(&format!(
-        "\nscanned {} source file(s), {} known debt(s)\ngate: {}\n",
+        "\nscanned {} source file(s), {} known issue(s)\ngate: {}\n",
         report.files_scanned,
         baselined,
         if report.passed() { "PASS" } else { "FAIL" }

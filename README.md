@@ -27,8 +27,31 @@ cargo build --offline
 ./target/debug/prodgate replay           # 检查规则本身有没有坏
 ./target/debug/prodgate gate             # 扫描当前仓库
 ./target/debug/prodgate cases            # 检查案例库
-./target/debug/prodgate baseline         # 把当前 FAIL 记为已知欠债
+./target/debug/prodgate baseline         # 把当前 FAIL 记为已知问题
+./target/debug/prodgate --help           # 所有命令和参数
+./target/debug/prodgate --version        # 版本号
 ```
+
+任何命令加 `--json` 会输出结构化报告，方便脚本和工具读取：
+
+```bash
+./target/debug/prodgate gate --json .
+```
+
+```json
+{
+  "tool": "prodgate",
+  "command": "gate",
+  "passed": true,
+  "files_scanned": 10,
+  "known_issues": 0,
+  "findings": [
+    { "rule": "rls", "verdict": "FAIL", "evidence": "src/db.rs:1", "note": "..." }
+  ]
+}
+```
+
+`replay`、`cases`、`all` 的 JSON 也有同样的 `tool` / `command` / `passed` 三个顶层字段。脚本只读 `passed` 就行，不用解析文本。退出码仍然和 `passed` 一致：通过是 0，失败是 1。
 
 扫别的项目时加上路径：`./target/debug/prodgate gate /path/to/project`。被扫的项目可以用 `prodgate.conf` 声明扫描哪些目录、属于什么形态：
 
@@ -65,13 +88,13 @@ surface=web
 
 `gate` 和 `all` 在失败时返回退出码 1。直接放到流水线的检查步骤里就行。
 
-老项目如果已经有一堆欠债，先跑一次 `baseline`：
+老项目如果已经有一堆已知问题，先跑一次 `baseline`：
 
 ```bash
 ./target/debug/prodgate baseline
 ```
 
-它会把当前的 FAIL 按 `rule|evidence` 写进 `.prodgate/baseline.txt`。之后再跑 `gate`，这些旧欠债显示为 `BASELINE`，报告但不阻塞；新出现的欠债仍然是 FAIL，会拦住构建。重跑一次 `baseline` 会把名单收缩到当前真实欠债，所以修一条就少一条。
+它会把当前的 FAIL 按 `rule|evidence` 写进 `.prodgate/baseline.txt`。之后再跑 `gate`，这些旧问题显示为 `BASELINE`，报告但不阻塞；新出现的问题仍然是 FAIL，会拦住构建。重跑一次 `baseline` 会把名单收缩到当前真实问题，所以修一条就少一条。
 
 ## 接入 AI（MCP）
 
@@ -96,7 +119,7 @@ surface=web
 | `prodgate_replay` | 改过规则之后 | 检查规则还能不能区分好坏样本 |
 | `prodgate_cases` | 加过案例之后 | 检查案例的来源和回放结果 |
 
-`baseline` 没有做成工具。冻结欠债需要人来决定，不能让 AI 自己把 FAIL 变成 PASS。
+`baseline` 没有做成工具。冻结已知问题需要人来决定，不能让 AI 自己把 FAIL 变成 PASS。
 
 如果传入的项目路径不存在，工具返回错误，不会返回 PASS。这点很重要：`run_gate` 扫到 0 个文件时本来会全 PASS，AI 拼错路径就会收到一个假的成功信号。
 
@@ -124,6 +147,20 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 它也不判断某行代码是不是 AI 写的。那种分类器在规范统一、用了 formatter 的仓库里误判率很高，不值得做。
 
 现在仍然是小工具。7 条规则覆盖的是最常见、最容易漏的几项，不是完整的安全审计。
+
+## 参与开发
+
+CI 在每次 push 和 PR 上跑四步：编译、测试、clippy（`-D warnings`）、自举门禁（`all` + `cases`）。本地跑同样的检查：
+
+```bash
+cargo build --locked
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
+cargo run --locked -- all .
+cargo run --locked -- cases .
+```
+
+改规则时，先改 fixture，再改规则，保证 `replay` 仍然能区分好坏样本。加案例时看 `CASES.md`。许可证是 MIT。
 
 ## 其他文档
 

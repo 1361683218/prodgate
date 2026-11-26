@@ -15,3 +15,4 @@ pub mod fixture;
 pub mod gate;
 pub mod json;
 pub mod mcp;
+pub mod report;

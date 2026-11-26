@@ -8,8 +8,8 @@ use std::path::Path;
 
 const BASELINE_FILE: &str = ".prodgate/baseline.txt";
 
-/// Stable identity of a finding. Deliberately excludes the note text: a debt
-/// stays the same debt when its description is reworded.
+/// Stable identity of a finding. Deliberately excludes the note text: an issue
+/// stays the same issue when its description is reworded.
 fn fingerprint(f: &Finding) -> String {
     format!("{}|{}", f.id, f.evidence)
 }
@@ -30,27 +30,29 @@ pub fn load_baseline(root: &Path) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Freeze the current FAIL set as known debt. Returns the number recorded.
-pub fn write_baseline(root: &Path) -> usize {
+/// Freeze the current FAIL set as known issues. Returns the number recorded.
+/// Errors are surfaced: a silently failed write would make a caller believe
+/// issues were frozen when nothing was saved.
+pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
     let report = run_gate_raw(root);
-    let debts: Vec<String> = report
+    let issues: Vec<String> = report
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Fail)
         .map(fingerprint)
         .collect();
 
-    let mut text = String::from("# prodgate baseline — known debt, shrink only\n");
-    for d in &debts {
+    let mut text = String::from("# prodgate baseline — known issues, shrink only\n");
+    for d in &issues {
         text.push_str(d);
         text.push('\n');
     }
     let path = baseline_path(root);
     if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent)?;
     }
-    let _ = fs::write(path, text);
-    debts.len()
+    fs::write(path, text)?;
+    Ok(issues.len())
 }
 
 #[derive(Debug, Clone)]
@@ -135,7 +137,7 @@ impl GateReport {
 }
 
 /// Scan without baseline comparison. Used by `write_baseline` so it captures
-/// the raw debt rather than the already-masked set.
+/// the raw issues rather than the already-masked set.
 fn run_gate_raw(root: &Path) -> GateReport {
     let cfg = load_config(root);
     let sources = collect_sources(root, &cfg.roots);
@@ -195,7 +197,7 @@ pub fn run_gate(root: &Path) -> GateReport {
     for f in &mut report.findings {
         if f.verdict == Verdict::Fail && baseline.contains(&fingerprint(f)) {
             f.verdict = Verdict::Baseline;
-            f.note = format!("known debt in baseline: {}", f.note);
+            f.note = format!("known issue in baseline: {}", f.note);
         }
     }
     report

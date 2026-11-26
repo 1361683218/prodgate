@@ -1,6 +1,29 @@
-use prodgate::{cases, check::Verdict, fixture, gate};
+use prodgate::{cases, check::Verdict, fixture, gate, report};
 use std::env;
 use std::path::Path;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn help() {
+    println!("prodgate {} — production-readiness gate", VERSION);
+    println!();
+    println!("Usage:");
+    println!("  prodgate <command> [options] [root]");
+    println!();
+    println!("Commands:");
+    println!("  gate       Scan a project against the rules");
+    println!("  replay     Check that every rule separates good from bad fixtures");
+    println!("  cases      Validate the contribution case library");
+    println!("  baseline   Record current FAILs as known issues");
+    println!("  all        Replay + gate (self-bootstrap check, the default)");
+    println!();
+    println!("Options:");
+    println!("  --json     Emit a machine-readable JSON report on stdout");
+    println!("  -h, --help Show this help");
+    println!("  -V, --version Show the version");
+    println!();
+    println!("Default root is the current directory.");
+}
 
 fn print_gate(root: &Path) -> bool {
     let report = gate::run_gate(root);
@@ -11,12 +34,15 @@ fn print_gate(root: &Path) -> bool {
             println!("    at {}", f.evidence);
         }
     }
-    let baselined = report
+    let known = report
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Baseline)
         .count();
-    println!("\nscanned {} source file(s), {} known debt(s)", report.files_scanned, baselined);
+    println!(
+        "\nscanned {} source file(s), {} known issue(s)",
+        report.files_scanned, known
+    );
     println!("gate: {}", if report.passed() { "PASS" } else { "FAIL" });
     report.passed()
 }
@@ -41,7 +67,10 @@ fn print_replay(root: &Path) -> bool {
 
 fn print_cases(root: &Path) -> bool {
     let results = cases::validate(root);
-    println!("{:<26} {:<12} {:<7} {:<7} STATUS", "CASE", "PROVENANCE", "GOOD", "BAD");
+    println!(
+        "{:<26} {:<12} {:<7} {:<7} STATUS",
+        "CASE", "PROVENANCE", "GOOD", "BAD"
+    );
     let mut ok = true;
     for r in &results {
         let status = if r.valid() { "OK" } else { "INVALID" };
@@ -70,30 +99,129 @@ fn print_cases(root: &Path) -> bool {
 }
 
 fn print_baseline(root: &Path) -> bool {
-    let n = gate::write_baseline(root);
-    println!("baseline: recorded {} known debt(s) in .prodgate/baseline.txt", n);
-    true
+    match gate::write_baseline(root) {
+        Ok(n) => {
+            println!(
+                "baseline: recorded {} known issue(s) in .prodgate/baseline.txt",
+                n
+            );
+            true
+        }
+        Err(e) => {
+            eprintln!("baseline: failed to write .prodgate/baseline.txt: {}", e);
+            false
+        }
+    }
+}
+
+struct Args {
+    command: String,
+    root: String,
+    json: bool,
+}
+
+fn parse_args() -> Result<Option<Args>, i32> {
+    let argv: Vec<String> = env::args().skip(1).collect();
+
+    if argv.iter().any(|a| a == "-h" || a == "--help") {
+        help();
+        return Ok(None);
+    }
+    if argv.iter().any(|a| a == "-V" || a == "--version") {
+        println!("prodgate {}", VERSION);
+        return Ok(None);
+    }
+
+    let json = argv.iter().any(|a| a == "--json");
+    let positional: Vec<&str> = argv
+        .iter()
+        .map(String::as_str)
+        .filter(|a| !a.starts_with('-'))
+        .collect();
+
+    // No positional command: preserve the historical default of `all`.
+    let command = positional.first().copied().unwrap_or("all").to_string();
+    let valid = ["gate", "replay", "baseline", "cases", "all"];
+    if !valid.contains(&command.as_str()) {
+        eprintln!("unknown command: {} (try --help)", command);
+        return Err(2);
+    }
+    let root_at = if positional.is_empty() { 0 } else { 1 };
+    if positional.len() > root_at + 1 {
+        eprintln!("too many arguments (try --help)");
+        return Err(2);
+    }
+    let root = positional.get(root_at).copied().unwrap_or(".").to_string();
+
+    Ok(Some(Args {
+        command,
+        root,
+        json,
+    }))
+}
+
+/// Emit JSON and return its `passed` field. The exit code stays consistent
+/// with the report so scripts can use either signal.
+fn emit_json(doc: prodgate::json::Json) -> bool {
+    let passed = doc
+        .get("passed")
+        .map(|v| matches!(v, prodgate::json::Json::Bool(true)))
+        .unwrap_or(false);
+    println!("{}", doc.stringify());
+    passed
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let cmd = args.get(1).map(String::as_str).unwrap_or("all");
-    let root = Path::new(args.get(2).map(String::as_str).unwrap_or("."));
+    let args = match parse_args() {
+        Ok(Some(a)) => a,
+        Ok(None) => return,
+        Err(code) => std::process::exit(code),
+    };
+    let root = Path::new(&args.root);
 
-    let ok = match cmd {
-        "gate" => print_gate(root),
-        "replay" => print_replay(root),
-        "baseline" => print_baseline(root),
-        "cases" => print_cases(root),
-        "all" => {
-            let a = print_replay(root);
-            println!();
-            let b = print_gate(root);
-            a && b
+    let ok = if args.json {
+        match args.command.as_str() {
+            "gate" => emit_json(report::gate_json(root)),
+            "replay" => emit_json(report::replay_json(root)),
+            "cases" => emit_json(report::cases_json(root)),
+            "all" => emit_json(report::all_json(root)),
+            "baseline" => {
+                // A write operation, but emits a report so scripts can chain
+                // it without switching output modes.
+                match gate::write_baseline(root) {
+                    Ok(recorded) => emit_json(prodgate::json::Json::Obj(vec![
+                        ("tool".into(), prodgate::json::Json::Str("prodgate".into())),
+                        (
+                            "command".into(),
+                            prodgate::json::Json::Str("baseline".into()),
+                        ),
+                        ("passed".into(), prodgate::json::Json::Bool(true)),
+                        (
+                            "recorded".into(),
+                            prodgate::json::Json::Num(recorded as f64),
+                        ),
+                    ])),
+                    Err(e) => {
+                        eprintln!("baseline: failed to write: {}", e);
+                        false
+                    }
+                }
+            }
+            _ => unreachable!(),
         }
-        _ => {
-            eprintln!("usage: prodgate <gate|replay|baseline|cases|all> [root]");
-            std::process::exit(2);
+    } else {
+        match args.command.as_str() {
+            "gate" => print_gate(root),
+            "replay" => print_replay(root),
+            "baseline" => print_baseline(root),
+            "cases" => print_cases(root),
+            "all" => {
+                let a = print_replay(root);
+                println!();
+                let b = print_gate(root);
+                a && b
+            }
+            _ => unreachable!(),
         }
     };
 

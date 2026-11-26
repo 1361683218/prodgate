@@ -7,7 +7,7 @@ use crate::adapter::SourceFile;
 pub enum Verdict {
     Pass,
     Fail,
-    /// A known debt recorded in the baseline: reported but does not block.
+    /// A known issue recorded in the baseline: reported but does not block.
     Baseline,
     NotAssessed,
 }
