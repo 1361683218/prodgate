@@ -22,6 +22,7 @@ fn help() {
     println!("  efficacy   Prompt information-sufficiency experiment on archived AI code");
     println!("  regression Check real-world snapshots for false positives");
     println!("  report     Generate a self-contained HTML report (--out FILE)");
+    println!("  artifacts  Verify phase artifacts named in artifacts.tsv");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -117,6 +118,21 @@ fn print_replay(root: &Path) -> bool {
     }
     println!("\nreplay: {}", if ok { "PASS" } else { "FAIL" });
     ok
+}
+
+fn print_artifacts(root: &Path) -> bool {
+    let r = prodgate::artifacts::check_root(root);
+    if !r.manifest_present {
+        println!("ARTIFACTS            no manifest (no artifact contract declared)");
+        println!("\nartifacts: PASS");
+        return true;
+    }
+    println!("ARTIFACTS            CHECKED   NOT-ASSESSED");
+    println!("manifest             {:<10} {}", r.checked, r.not_assessed.len());
+    for f in &r.failures { println!("    FAIL: {}", f); }
+    for n in &r.not_assessed { println!("    NOT-ASSESSED: {}", n); }
+    println!("\nartifacts: {}", if r.passed() { "PASS" } else { "FAIL" });
+    r.passed()
 }
 
 fn print_regression() -> bool {
@@ -276,7 +292,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "history", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report"];
+    let valid = ["gate", "history", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report", "artifacts"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -347,6 +363,7 @@ fn main() {
             "efficacy" => emit_json(prodgate::efficacy::to_json(&prodgate::efficacy::run(
                 Path::new(env!("CARGO_MANIFEST_DIR")),
             ))),
+            "artifacts" => emit_json(prodgate::artifacts::to_json(&prodgate::artifacts::check_root(root))),
             "regression" => emit_json(prodgate::regression::to_json(&prodgate::regression::run())),
             "report" => {
                 // HTML is a human artifact; --json on report emits metadata
@@ -402,6 +419,7 @@ fn main() {
                     Err(e) => { eprintln!("report: failed to write {}: {}", out.display(), e); false }
                 }
             }
+            "artifacts" => print_artifacts(root),
             "regression" => {
                 let r = prodgate::regression::run();
                 println!("snapshots            : {}", r.snapshots);
@@ -443,6 +461,8 @@ fn main() {
                 println!();
                 let r = print_regression();
                 println!();
+                let art = print_artifacts(root);
+                println!();
                 print_efficacy_summary();
                 // A baseline can flip FAIL to PASS without changing code.
                 // Always show how many issues are frozen, and fail loudly if
@@ -456,7 +476,7 @@ fn main() {
                     if frozen > limit { "OVER LIMIT" } else { "within limit" },
                     if frozen > limit { "— gate bypass suspected" } else { "" }
                 );
-                a && m && b && c && r && frozen <= limit
+                a && m && b && c && r && art && frozen <= limit
             }
             _ => unreachable!(),
         }

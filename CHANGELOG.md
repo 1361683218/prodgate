@@ -411,3 +411,11 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 用户开启 GitHub 分支保护后 CI 连续失败 5 次(exit 101)，本地 macOS 全过。排查：annotation 只说 exit 101 拿不到日志（需 admin）→ 拆步骤出现假绿灯（cmd | tee 吞掉真实失败）→ 加 pipefail 重现 → 让 CI 用 ::error:: annotation 自报失败输出 → 根因：项目有两个二进制，cargo run 在 CI 要求显式 --bin。加 --bin prodgate 后 CI 全绿。
 
 教训：本地 cargo 默默选默认二进制，CI 更严格；| tee 不加 pipefail 是假绿灯制造机——本项目存在的意义就是防假绿灯，结果自己 CI 栽了。REDTEAM.md 补完整排查记录。分支保护+CODEOWNERS+CI 全绿，攻击6防线从空变实。
+
+## 第 41 轮：两套合并成一套体系（用户选"合并"）
+
+工作区根目录凌晨的 AGENT-COLLAB-PROTOCOL.md + protocol-check.sh 和下午的 prodgate/Ralph Loop/红队防线是两条独立线。用户选合并。
+
+共同内核：完成不能由 AI 自己说了算。合并方式不是写大文档，而是让 prodgate 成为唯一裁判：新增 src/artifacts.rs 吸收协作协议 §4 的 artifact-on-disk 检查（兼容 protocol-check.sh 的 TSV 格式，not-assessed 无理由=FAIL），纳入 all_json 和文本 all 作为第七道门禁。Ralph Loop 的 judge.sh 包 prodgate all，自动继承不用改。
+
+CLI prodgate artifacts（文本+JSON）+ MCP tool。8 个测试（含 all 继承）。127 测试全过。顶层 AI-WORKFLOW.md 讲清三者怎么咬合，协作协议头部加统一视角指引。

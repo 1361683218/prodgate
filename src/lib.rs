@@ -9,6 +9,7 @@
 //! carries a (good, bad) fixture pair so the rule library is replayable.
 
 pub mod adapter;
+pub mod artifacts;
 pub mod cases;
 pub mod check;
 pub mod efficacy;

@@ -30,6 +30,7 @@ prodgate 把这类"看不见的防护"变成两样东西：
 | mutation | 端到端能检出注入的坏样本 | 18/18 |
 | cases | 案例库来源真实、回放正确 | 16/16，0 invalid |
 | regression | 真实形态代码零误报（10 个快照） | 0 false positive |
+| artifacts | 阶段产物在磁盘上（协议 §4 的机械执行） | 无 manifest 时 PASS |
 | gate | 工具扫自己 | PASS |
 
 另有 `efficacy` 实验（信息性，不阻塞）：13 个 AI 亲写代码样本触发 13 个 finding，涉及 10 种规则；prompt 对这 10 种规则覆盖 10/10，且教的好写法 10/10 不触发对应规则。

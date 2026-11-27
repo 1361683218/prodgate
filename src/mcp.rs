@@ -150,6 +150,14 @@ fn tools_list() -> Json {
                 schema(vec![], &[]),
             ),
             tool(
+                "prodgate_artifacts",
+                "Verify that every artifact named in artifacts.tsv exists and is non-empty. \
+                 Implements the collaboration protocol's artifact-on-disk rule: a phase with \
+                 a missing named output is failed, regardless of what the agent reported. \
+                 NOT ASSESSED entries without a reason are failures.",
+                schema(vec![], &[]),
+            ),
+            tool(
                 "prodgate_regression",
                 "Check curated real-world code snapshots for false positives. Each snapshot is a \
                  real shape that looks like a rule trigger but is safe. Guards precision when \
@@ -223,6 +231,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
         "prodgate_rules" => call_rules(),
         "prodgate_prompt" => call_prompt(args),
         "prodgate_efficacy" => call_efficacy(),
+        "prodgate_artifacts" => with_root(args, call_artifacts),
         "prodgate_regression" => call_regression(),
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
@@ -307,6 +316,19 @@ fn call_efficacy() -> ToolResult {
     );
     for g in &r.gaps { text.push_str(&format!("GAP: {}\n", g)); }
     text.push_str(&format!("result: {}\n", if r.passed { "PASS" } else { "FAIL" }));
+    ToolResult::ok(text)
+}
+
+fn call_artifacts(root: &Path) -> ToolResult {
+    let r = crate::artifacts::check_root(root);
+    let mut text = format!(
+        "Artifact check: {} entry(s), {} failure(s), {} not-assessed\n",
+        r.checked, r.failures.len(), r.not_assessed.len()
+    );
+    if !r.manifest_present { text.push_str("No artifacts.tsv manifest declared.\n"); }
+    for f in &r.failures { text.push_str(&format!("FAIL: {}\n", f)); }
+    for n in &r.not_assessed { text.push_str(&format!("NOT-ASSESSED: {}\n", n)); }
+    text.push_str(&format!("result: {}\n", if r.passed() { "PASS" } else { "FAIL" }));
     ToolResult::ok(text)
 }
 

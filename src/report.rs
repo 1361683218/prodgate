@@ -154,6 +154,10 @@ pub fn all_json(root: &Path) -> Json {
     let gate = gate_json(root);
     let cases = cases_json(root);
     let regression = crate::regression::to_json(&crate::regression::run());
+    // Artifact-on-disk: a phase whose named output is missing is failed, no
+    // matter how convincing the agent's report sounds. Absent manifest means
+    // the project declares no artifact contract — legitimate PASS.
+    let artifacts = crate::artifacts::to_json(&crate::artifacts::check_root(root));
     // Efficacy is an experiment report, not a gate: it measures information
     // sufficiency and can legitimately be inspected without blocking a build.
     let efficacy = crate::efficacy::to_json(&crate::efficacy::run(root));
@@ -175,6 +179,7 @@ pub fn all_json(root: &Path) -> Json {
         && is_true(&gate)
         && is_true(&cases)
         && is_true(&regression)
+        && is_true(&artifacts)
         && baseline_ok;
     Json::Obj(vec![
         ("tool".into(), s("prodgate")),
@@ -185,6 +190,7 @@ pub fn all_json(root: &Path) -> Json {
         ("gate".into(), gate),
         ("cases".into(), cases),
         ("regression".into(), regression),
+        ("artifacts".into(), artifacts),
         ("baseline_count".into(), Json::Num(baseline_count as f64)),
         ("baseline_limit".into(), Json::Num(gate::MAX_BASELINE as f64)),
         ("efficacy".into(), efficacy),

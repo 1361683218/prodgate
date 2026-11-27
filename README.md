@@ -123,6 +123,17 @@ MCP 里对应 `prodgate_regression` tool。
 
 MCP 里对应 `prodgate_efficacy` tool。
 
+## Artifact-on-disk 门禁
+
+`prodgate artifacts` 检查 `artifacts.tsv` 里点名的阶段产物是否存在且非空——"产物不在磁盘上，这个阶段就是失败的，不管回答多流畅"。格式兼容 `protocol-check.sh`：
+
+```tsv
+phase1	required	output/draft.md
+phase2	not-assessed	output/browser.md	no browser available
+```
+
+`not-assessed` 必须带理由，没理由算 FAIL（沉默跳过等于通过是最危险的）。**这道门禁已纳入 `all`**，所以 Ralph Loop 的裁判自动继承。
+
 ## 可视化报告
 
 `prodgate report /path/to/project --out report.html` 生成一个**单文件 HTML 报告**：规则通过率统计、每条 finding 的详情与修复建议、按状态筛选。CSS 和 JS 全部内嵌，无 CDN 无外部资源，离线直接打开。扫描结果里的代码文本会做 HTML 转义，报告本身不会成为注入入口。
