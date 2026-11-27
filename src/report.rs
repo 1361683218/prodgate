@@ -127,12 +127,23 @@ pub fn all_json(root: &Path) -> Json {
     let replay = replay_json(root);
     let mutation = mutation_json();
     let gate = gate_json(root);
+    let cases = cases_json(root);
+    let regression = crate::regression::to_json(&crate::regression::run());
+    // Efficacy is an experiment report, not a gate: it measures information
+    // sufficiency and can legitimately be inspected without blocking a build.
+    let efficacy = crate::efficacy::to_json(&crate::efficacy::run(root));
     let is_true = |d: &Json| {
         d.get("passed")
             .map(|v| matches!(v, Json::Bool(true)))
             .unwrap_or(false)
     };
-    let passed = is_true(&replay) && is_true(&mutation) && is_true(&gate);
+    // Every guard must pass. A false positive reintroduced by a rule change
+    // fails `regression`, even if replay/gate still look fine.
+    let passed = is_true(&replay)
+        && is_true(&mutation)
+        && is_true(&gate)
+        && is_true(&cases)
+        && is_true(&regression);
     Json::Obj(vec![
         ("tool".into(), s("prodgate")),
         ("command".into(), s("all")),
@@ -140,5 +151,8 @@ pub fn all_json(root: &Path) -> Json {
         ("replay".into(), replay),
         ("mutation".into(), mutation),
         ("gate".into(), gate),
+        ("cases".into(), cases),
+        ("regression".into(), regression),
+        ("efficacy".into(), efficacy),
     ])
 }

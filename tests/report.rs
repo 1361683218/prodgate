@@ -93,11 +93,23 @@ fn replay_and_cases_json_report_passed() {
 }
 
 #[test]
-fn all_json_aggregates_both_sections() {
+fn all_json_aggregates_every_guard() {
+    // A guard that exists but is not in `all` will not run in CI. Assert the
+    // aggregate carries every one, so adding a sentinel means updating here.
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let doc = report::all_json(root);
     assert!(passed(&doc));
-    assert!(doc.get("replay").is_some());
-    assert!(doc.get("gate").is_some());
+    for guard in ["replay", "mutation", "gate", "cases", "regression", "efficacy"] {
+        assert!(doc.get(guard).is_some(), "all_json must aggregate {}", guard);
+    }
     assert_eq!(doc.get("command").and_then(Json::as_str), Some("all"));
+
+    // Gating guards must pass; efficacy is informational but reported.
+    for guard in ["replay", "mutation", "gate", "cases", "regression"] {
+        let section = doc.get(guard).unwrap();
+        assert!(
+            matches!(section.get("passed"), Some(Json::Bool(true))),
+            "{} must pass inside all_json", guard
+        );
+    }
 }

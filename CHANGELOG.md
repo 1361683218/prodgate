@@ -287,3 +287,11 @@ CLI prodgate efficacy（文本+JSON）+ MCP prodgate_efficacy tool。新增 test
 新增 src/regression.rs 直接对快照跑全部规则，确认零 FAIL。CLI prodgate regression（文本+JSON）+ MCP prodgate_regression tool。新增 tests/regression.rs 5 测试，包括"守护守护本身"——断言已知 FP 形态仍在快照里，防有人靠删快照让测试通过；以及快照非空、扩展名可识别（防 vacuous pass）。
 
 96 测试全过，clippy 待验，自举 PASS。
+
+## 第 28 轮：all 统一为完整门禁
+
+哨兵散落问题：efficacy 和 regression 建成后没进 CI——CI 只跑 `all`（replay+mutation+gate）和 `cases`。改规则重新引入误报，regression 会挂但 CI 不知道。
+
+把 cases、regression 纳入 `all`（文本版和 all_json），efficacy 作为信息性报告展示但不阻塞（实验指标不该让构建变红）。文本版所有关卡都执行完再汇总，不让一个失败掩盖其他状态。CI workflow 从两步门禁简化成一步 `all`。
+
+加测试断言 all_json 必须聚合全部六项，且五个 gating 守卫的 passed 都为 true——以后加哨兵忘接进 all，测试立刻挂。96 测试全过，自举 PASS。

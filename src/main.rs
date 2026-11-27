@@ -72,6 +72,40 @@ fn print_replay(root: &Path) -> bool {
     ok
 }
 
+fn print_regression() -> bool {
+    let r = prodgate::regression::run();
+    println!("{:<22} FILES   FALSE-POSITIVES", "REGRESSION");
+    println!(
+        "{:<22} {:<7} {}",
+        "real-world snapshots", r.files_scanned, r.false_positives.len()
+    );
+    for fp in &r.false_positives {
+        println!("    FP: {}", fp);
+    }
+    println!(
+        "\nregression: {}",
+        if r.passed { "PASS" } else { "FAIL" }
+    );
+    r.passed
+}
+
+/// Efficacy is reported but does not gate: it measures information
+/// sufficiency, and a temporary experiment gap should not block a build.
+fn print_efficacy_summary() {
+    let r = prodgate::efficacy::run(Path::new(env!("CARGO_MANIFEST_DIR")));
+    println!(
+        "efficacy (information only): {}/{} rules covered, {}/{} counterfactual ok — {}",
+        r.covered,
+        r.rules_hit.len(),
+        r.counterfactual_ok,
+        r.rules_hit.len(),
+        if r.passed { "PASS" } else { "FAIL" }
+    );
+    for g in &r.gaps {
+        println!("    GAP: {}", g);
+    }
+}
+
 fn print_cases(root: &Path) -> bool {
     let results = cases::validate(root);
     println!(
@@ -295,12 +329,20 @@ fn main() {
                 true
             }
             "all" => {
+                // Every guard runs — no early exit — so one failing check
+                // cannot hide the state of the others.
                 let a = print_replay(root);
                 println!();
                 let m = print_mutation();
                 println!();
                 let b = print_gate(root);
-                a && m && b
+                println!();
+                let c = print_cases(root);
+                println!();
+                let r = print_regression();
+                println!();
+                print_efficacy_summary();
+                a && m && b && c && r
             }
             _ => unreachable!(),
         }

@@ -25,8 +25,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: Replay + self-gate
+      - name: Full gate (replay + mutation + gate + cases + regression)
         run: cargo run --locked -- all .
 
-      - name: Case library
-        run: cargo run --locked -- cases .
+      # `all` aggregates every guard. Adding a new sentinel to main.rs is
+      # enough to make CI enforce it — no extra workflow step needed.

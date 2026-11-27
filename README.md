@@ -249,7 +249,7 @@ mutation: 10/10 detected — PASS
 
 ## 参与开发
 
-CI 在每次 push 和 PR 上跑四步：编译、测试、clippy（`-D warnings`）、自举门禁（`all` + `cases`）。本地跑同样的检查：
+CI 在每次 push 和 PR 上跑四步：编译、测试、clippy（`-D warnings`）、完整门禁（`all`）。`all` 聚合 replay、mutation、gate、cases、regression 五道关卡，并附上 efficacy 实验报告（信息性，不阻塞）。新增哨兵只要接进 `all`，CI 自动强制，不用改 workflow。本地跑同样的检查：
 
 ```bash
 cargo build --locked
