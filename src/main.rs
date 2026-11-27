@@ -1,4 +1,4 @@
-use prodgate::{cases, check::Verdict, fixture, gate, report};
+use prodgate::{cases, check::Verdict, fixture, gate, mutation, report};
 use std::env;
 use std::path::Path;
 
@@ -14,8 +14,9 @@ fn help() {
     println!("  gate       Scan a project against the rules");
     println!("  replay     Check that every rule separates good from bad fixtures");
     println!("  cases      Validate the contribution case library");
+    println!("  mutate     Inject known-bad samples into real project layouts");
     println!("  baseline   Record current FAILs as known issues");
-    println!("  all        Replay + gate (self-bootstrap check, the default)");
+    println!("  all        Replay + mutate + gate (self-bootstrap check, the default)");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -98,6 +99,31 @@ fn print_cases(root: &Path) -> bool {
     ok
 }
 
+fn print_mutation() -> bool {
+    let results = mutation::run_mutations();
+    println!("{:<38} {:<20} {:<8} STATUS", "SAMPLE", "RULE", "DETECTED");
+    for r in &results {
+        println!(
+            "{:<38} {:<20} {:<8} {}",
+            r.name,
+            r.rule,
+            if r.detected { "yes" } else { "no" },
+            if r.ok() { "OK" } else { "MISS" }
+        );
+        if !r.ok() {
+            println!("    note: {}", r.note);
+        }
+    }
+    let detected = results.iter().filter(|r| r.ok()).count();
+    println!(
+        "\nmutation: {}/{} detected — {}",
+        detected,
+        results.len(),
+        if mutation::passed(&results) { "PASS" } else { "FAIL" }
+    );
+    mutation::passed(&results)
+}
+
 fn print_baseline(root: &Path) -> bool {
     match gate::write_baseline(root) {
         Ok(n) => {
@@ -141,7 +167,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "all"];
+    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -184,6 +210,7 @@ fn main() {
             "gate" => emit_json(report::gate_json(root)),
             "replay" => emit_json(report::replay_json(root)),
             "cases" => emit_json(report::cases_json(root)),
+            "mutate" => emit_json(report::mutation_json()),
             "all" => emit_json(report::all_json(root)),
             "baseline" => {
                 // A write operation, but emits a report so scripts can chain
@@ -215,11 +242,14 @@ fn main() {
             "replay" => print_replay(root),
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
+            "mutate" => print_mutation(),
             "all" => {
                 let a = print_replay(root);
                 println!();
+                let m = print_mutation();
+                println!();
                 let b = print_gate(root);
-                a && b
+                a && m && b
             }
             _ => unreachable!(),
         }

@@ -94,3 +94,17 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 方法论结论写进 BENCHMARK：只扫真实项目会给你虚假的安全感，必须做受控注入才能发现漏检。以后每条规则都要双向验证。
 
 新增 3 个回归测试（real_world.rs 从 7 到 10）。全套 37 测试通过，clippy 干净，自举 PASS。
+
+## 第 10 轮：mutate 产品化
+
+判断：先不做 Autofix。静态扫描推断不了运行时行为，基于不完整信号自动改代码会引入"改坏代码"这个新失败模式，风险大于价值。
+
+改做更有价值的事——把前两轮最大的方法论收获（受控注入验证）从 BENCHMARK.md 的文字变成可执行的能力。新增 `src/mutation.rs`：6 个已知坏样本，每个放进模拟真实框架目录结构的临时项目（`lib/express.js`、`src/flask/app.py`、`gin.go`），走完整 gate 流程（配置加载 → 文件收集 → adapter → 规则），验证对应规则报 FAIL。
+
+这补上了 replay 的盲区：replay 直接调规则函数，跳过配置/收集/适配这些步骤。规则正确但项目没扫到文件，replay 照样过。两个样本来自真实框架写法，一个来自 expressjs/cors PR #39。
+
+接入 CLI（`mutate` 子命令，文本+JSON）、report、MCP（第 5 个工具 `prodgate_mutate`），并纳入 `all` 自举判据——现在 replay、mutation、gate 三项都要过。
+
+做了端到端负向验证：临时把 cors_wildcard 改成永远返回 None，mutate 立刻 4 个 MISS、整体 FAIL（2/6）；恢复后 6/6。证明它不是摆设。CI 因为跑 `all` 自动覆盖 mutate，无需改配置。
+
+新增 tests/mutation.rs 5 个测试（含"空集合不算 PASS"和"一个 MISS 就整体失败"）。全套 42 测试通过，clippy 干净，自举 PASS。

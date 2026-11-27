@@ -8,7 +8,7 @@
 //! turn a gate into a rubber stamp.
 
 use crate::json::Json;
-use crate::{cases, check, fixture, gate};
+use crate::{cases, check, fixture, gate, mutation};
 use std::path::Path;
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
@@ -154,6 +154,14 @@ fn tools_list() -> Json {
                  each real-world case still separates good from bad.",
                 schema(vec![("root", root_property())], &["root"]),
             ),
+            tool(
+                "prodgate_mutate",
+                "Inject known-bad samples into temporary projects that mirror real \
+                 frameworks (express/flask/gin) and verify every rule still detects \
+                 them end-to-end. Use after editing a rule: replay only calls the \
+                 rule function, mutation runs the full scan pipeline.",
+                schema(vec![], &[]),
+            ),
         ]),
     )])
 }
@@ -194,6 +202,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
         "prodgate_cases" => with_root(args, call_cases),
+        "prodgate_mutate" => call_mutate(),
         _ => ToolResult::err(format!("unknown tool: {}", name)),
     };
 
@@ -328,6 +337,39 @@ fn call_cases(root: &Path) -> ToolResult {
         results.len(),
         cases::trusted_count(&results),
         results.iter().filter(|r| !r.valid()).count(),
+        if ok { "PASS" } else { "FAIL" }
+    ));
+    if ok {
+        ToolResult::ok(text)
+    } else {
+        ToolResult::err(text)
+    }
+}
+
+fn call_mutate() -> ToolResult {
+    let results = mutation::run_mutations();
+    let mut text = format!(
+        "{:<38} {:<20} {:<8} STATUS\n",
+        "SAMPLE", "RULE", "DETECTED"
+    );
+    for r in &results {
+        text.push_str(&format!(
+            "{:<38} {:<20} {:<8} {}\n",
+            r.name,
+            r.rule,
+            if r.detected { "yes" } else { "no" },
+            if r.ok() { "OK" } else { "MISS" }
+        ));
+        if !r.ok() {
+            text.push_str(&format!("    note: {}\n", r.note));
+        }
+    }
+    let detected = results.iter().filter(|r| r.ok()).count();
+    let ok = mutation::passed(&results);
+    text.push_str(&format!(
+        "\nmutation: {}/{} detected — {}\n",
+        detected,
+        results.len(),
         if ok { "PASS" } else { "FAIL" }
     ));
     if ok {

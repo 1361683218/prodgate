@@ -27,6 +27,7 @@ cargo build --offline
 ./target/debug/prodgate replay           # 检查规则本身有没有坏
 ./target/debug/prodgate gate             # 扫描当前仓库
 ./target/debug/prodgate cases            # 检查案例库
+./target/debug/prodgate mutate           # 注入已知坏样本，验证规则端到端能检出
 ./target/debug/prodgate baseline         # 把当前 FAIL 记为已知问题
 ./target/debug/prodgate --help           # 所有命令和参数
 ./target/debug/prodgate --version        # 版本号
@@ -112,13 +113,14 @@ Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recu
 }
 ```
 
-四个工具，都是只读的：
+五个工具，都是只读的：
 
 | 工具 | 什么时候用 | 返回什么 |
 |---|---|---|
 | `prodgate_rules` | 写代码之前 | 列出 7 条规则，让 AI 提前知道要加哪些防护 |
 | `prodgate_gate` | 写完代码之后 | 每条规则的 PASS / FAIL / NOT-ASSESSED，带行号 |
 | `prodgate_replay` | 改过规则之后 | 检查规则还能不能区分好坏样本 |
+| `prodgate_mutate` | 改过规则之后 | 把真实坏样本注入临时项目，验证端到端能检出 |
 | `prodgate_cases` | 加过案例之后 | 检查案例的来源和回放结果 |
 
 `baseline` 没有做成工具。冻结已知问题需要人来决定，不能让 AI 自己把 FAIL 变成 PASS。
@@ -142,6 +144,32 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 案例库现在有 3 个案例，其中 2 个带可核验的上游 commit。贡献格式见 `CASES.md`。
 
+## 端到端验证（mutate）
+
+`replay` 有个盲区：它直接调用规则函数，跳过配置加载、文件收集、语言适配这些步骤。规则本身正确，但项目根本没扫到那个文件，replay 照样通过。
+
+`mutate` 补上这一层。它把已知坏样本放进临时项目，保留真实框架的目录结构（`lib/express.js`、`src/flask/app.py`、`gin.go`），然后跑完整的 gate 流程，检查对应规则是否报 FAIL。
+
+```bash
+./target/debug/prodgate mutate
+```
+
+```
+SAMPLE                                 RULE                 DETECTED STATUS
+express setHeader wildcard             cors.wildcard        yes      OK
+flask headers assignment wildcard      cors.wildcard        yes      OK
+gin Header call wildcard               cors.wildcard        yes      OK
+expressjs/cors PR #39 two-line         cors.wildcard        yes      OK
+hardcoded api key in production        secrets.hardcoded    yes      OK
+explicit rls opt-out                   rls                  yes      OK
+
+mutation: 6/6 detected — PASS
+```
+
+这 6 个样本来自真实项目和真实 PR。第 9 轮曾把 Express 的 `setHeader('Access-Control-Allow-Origin', '*')` 注入真实项目，发现规则漏检——`cors.wildcard` 当时只认 `:` 和 `=`，不认函数调用的逗号传参。这类问题 replay 永远发现不了。
+
+`all` 命令同时跑 replay、mutate 和 gate，三项都要通过。MCP 也暴露了 `prodgate_mutate` 工具，AI 改完规则可以直接自查。
+
 ## 已知限制
 
 只做静态检查，不推断运行时行为。「这项防护到底实现得对不对」超出了它的能力范围。
@@ -162,7 +190,7 @@ cargo run --locked -- all .
 cargo run --locked -- cases .
 ```
 
-改规则时，先改 fixture，再改规则，保证 `replay` 仍然能区分好坏样本。加案例时看 `CASES.md`。许可证是 MIT。
+改规则时，先改 fixture，再改规则，保证 `replay` 仍然能区分好坏样本。还要跑 `mutate`——只过 replay 不过 mutation，说明规则在自己的玩具样本上有效，但扫不到真实代码。加案例时看 `CASES.md`。许可证是 MIT。
 
 ## 其他文档
 

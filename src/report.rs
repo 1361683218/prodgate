@@ -4,7 +4,7 @@
 //! plus command-specific data. Consumers only need to read `passed`.
 
 use crate::json::Json;
-use crate::{cases, check, fixture, gate};
+use crate::{cases, check, fixture, gate, mutation};
 use std::path::Path;
 
 fn s(value: &str) -> Json {
@@ -91,24 +91,50 @@ pub fn cases_json(root: &Path) -> Json {
     ])
 }
 
-/// Combined report for `all`. The CLI's `all` runs replay then gate; this
-/// function produces both sections in one document for CI consumption.
+pub fn mutation_json() -> Json {
+    let results = mutation::run_mutations();
+    let detected = results.iter().filter(|r| r.ok()).count();
+    let entries: Vec<Json> = results
+        .iter()
+        .map(|r| {
+            Json::Obj(vec![
+                ("name".into(), s(r.name)),
+                ("rule".into(), s(r.rule)),
+                ("detected".into(), Json::Bool(r.detected)),
+                ("evidence".into(), s(&r.evidence)),
+                ("note".into(), s(&r.note)),
+            ])
+        })
+        .collect();
+    Json::Obj(vec![
+        ("tool".into(), s("prodgate")),
+        ("command".into(), s("mutate")),
+        ("passed".into(), Json::Bool(mutation::passed(&results))),
+        ("detected".into(), Json::Num(detected as f64)),
+        ("total".into(), Json::Num(results.len() as f64)),
+        ("results".into(), Json::Arr(entries)),
+    ])
+}
+
+/// Combined report for `all`: replay, mutation, then gate. All three must
+/// pass. A rule that passes replay but misses mutation is not protecting
+/// anything; this is why mutation is part of the self-bootstrap criteria.
 pub fn all_json(root: &Path) -> Json {
     let replay = replay_json(root);
+    let mutation = mutation_json();
     let gate = gate_json(root);
-    let passed = replay
-        .get("passed")
-        .map(|v| matches!(v, Json::Bool(true)))
-        .unwrap_or(false)
-        && gate
-            .get("passed")
+    let is_true = |d: &Json| {
+        d.get("passed")
             .map(|v| matches!(v, Json::Bool(true)))
-            .unwrap_or(false);
+            .unwrap_or(false)
+    };
+    let passed = is_true(&replay) && is_true(&mutation) && is_true(&gate);
     Json::Obj(vec![
         ("tool".into(), s("prodgate")),
         ("command".into(), s("all")),
         ("passed".into(), Json::Bool(passed)),
         ("replay".into(), replay),
+        ("mutation".into(), mutation),
         ("gate".into(), gate),
     ])
 }
