@@ -40,6 +40,25 @@ API:    cors.wildcard@src/server.js:6
 Webhook: secrets.hardcoded@src/main.py:5
 ```
 
+## 第二批：更多场景
+
+又让 AI 写了 4 个不同领域的服务（认证、数据库、文件上传、日志），共 60 行：
+
+| 场景 | AI 写了什么 | 结果 |
+|---|---|---|
+| auth | `SECRET = "my-super-secret-jwt-key-12345"` | ✅ 抓到 |
+| db | `postgresql://admin:password123@localhost/prod` | ❌ 当时漏检，已修 |
+| upload | 无认证文件上传 | ❌ 超出 7 条规则范围 |
+| logging | 只有 `logger.error`，无集中错误追踪 | 全 PASS（假绿灯） |
+
+连接串漏检的原因很典型：变量名是 `engine`，不是凭证键，所以"键名 → 值"的规则看不见。修法是加一条**值格式信号**——`scheme://user:password@host` 本身就是凭证泄露，不管变量叫什么。只匹配数据库连接串，跳过 https 基本认证和占位符密码（`password`、`${DB_PASS}`）。注意 `password123` 这类真实密码不能被当占位符跳过，所以占位符判断用精确相等而非子串包含。修完后 db 场景也抓到了。
+
+## 假绿灯问题
+
+logging 服务连集中错误追踪都没有，7 条规则却全报 PASS——因为声明型规则没看到 `prodgate: error_tracking=off` 就默认通过。这和第 8 轮修的"扫 0 文件报 PASS"是同类问题，只是更隐蔽。
+
+修法不是把"没信号"改成 FAIL（静态扫推断不了运行时，所有项目都会挂），而是加 `UNCONFIRMED` 判定：声明型规则没看到标记时不再说 PASS，明确说"未确认"——不阻塞构建，但报告里看得见。信号型规则（cors/secrets）没信号仍是真 PASS，因为它们确实扫了代码没发现危险写法。
+
 ## 回答那个问题
 
 **强 AI 会犯这些错吗？会，而且犯得自然。**

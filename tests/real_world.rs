@@ -225,3 +225,31 @@ fn explicit_cors_config_is_not_a_wildcard() {
         );
     }
 }
+
+#[test]
+fn ai_db_connection_uri_password_is_detected() {
+    // Written naturally by AI in a "database helpers" scenario. The variable
+    // is `engine`, not a credential name — key-name rules cannot see this.
+    let src = "engine = create_engine(\"postgresql://admin:password123@localhost/prod\")";
+    assert_eq!(
+        verdict("secrets.hardcoded", "src/users.py", src),
+        Verdict::Fail
+    );
+}
+
+#[test]
+fn database_uri_placeholders_are_not_flagged() {
+    for src in [
+        "engine = create_engine(\"postgresql://localhost/prod\")",
+        "url = \"postgresql://admin:password@localhost/db\"",
+        "url = \"postgresql://admin:${DB_PASS}@localhost/db\"",
+        "url = \"https://user:pass@example.com\"",
+    ] {
+        assert_eq!(
+            verdict("secrets.hardcoded", "src/db.py", src),
+            Verdict::Pass,
+            "false positive on: {}",
+            src
+        );
+    }
+}

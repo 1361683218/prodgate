@@ -12,6 +12,17 @@ const BASELINE_FILE: &str = ".prodgate/baseline.txt";
 /// from the real rule set so baseline cannot freeze a misconfiguration.
 const NO_SOURCES_RULE: &str = "config.no-sources";
 
+/// Declaration rules look for an explicit opt-out marker. No marker means
+/// "nobody said anything", NOT "the control is confirmed present". Report
+/// that as UNCONFIRMED rather than a clean PASS.
+const DECLARATION_RULES: &[&str] = &[
+    "rate.limit",
+    "error.tracking",
+    "webhook.idempotency",
+    "rls",
+    "backup",
+];
+
 /// Stable identity of a finding. Deliberately excludes the note text: an issue
 /// stays the same issue when its description is reworded.
 fn fingerprint(f: &Finding) -> String {
@@ -234,11 +245,25 @@ fn run_gate_raw(root: &Path) -> GateReport {
                 break;
             }
         }
-        findings.push(hit.unwrap_or(Finding {
-            id: rule.id,
-            verdict: Verdict::Pass,
-            evidence: "-".into(),
-            note: format!("{} source file(s) scanned, no signal", sources.len()),
+        findings.push(hit.unwrap_or_else(|| {
+            let is_declaration = DECLARATION_RULES.contains(&rule.id);
+            Finding {
+                id: rule.id,
+                verdict: if is_declaration {
+                    Verdict::Unconfirmed
+                } else {
+                    Verdict::Pass
+                },
+                evidence: "-".into(),
+                note: if is_declaration {
+                    format!(
+                        "no opt-out declared in {} source file(s); presence of the control is not confirmed",
+                        sources.len()
+                    )
+                } else {
+                    format!("{} source file(s) scanned, no signal", sources.len())
+                },
+            }
         }));
     }
 

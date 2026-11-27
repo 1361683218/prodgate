@@ -9,6 +9,10 @@ pub enum Verdict {
     Fail,
     /// A known issue recorded in the baseline: reported but does not block.
     Baseline,
+    /// Declaration rule saw no opt-out marker. This is NOT proof that the
+    /// control exists — only that nobody declared anything. Non-blocking,
+    /// but must not be reported as a clean PASS.
+    Unconfirmed,
     NotAssessed,
 }
 
@@ -18,6 +22,7 @@ impl Verdict {
             Verdict::Pass => "PASS",
             Verdict::Fail => "FAIL",
             Verdict::Baseline => "BASELINE",
+            Verdict::Unconfirmed => "UNCONFIRMED",
             Verdict::NotAssessed => "NOT-ASSESSED",
         }
     }
@@ -193,6 +198,45 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     None
 }
 
+/// Detect `db_scheme://user:password@host` inline credentials. Returns a
+/// finding note when found. Only data-store schemes are checked — HTTPS URLs
+/// with basic-auth (`https://user:pass@host`) are often fixtures and are not
+/// server-side secrets. Placeholder passwords are also skipped.
+fn uri_with_password(line: &str) -> Option<&'static str> {
+    let schemes = [
+        "postgres://", "postgresql://", "mysql://", "mongodb://",
+        "mongodb+srv://", "redis://", "mssql://", "oracle://", "amqp://",
+    ];
+    let lower = line.to_lowercase();
+    for scheme in schemes {
+        let mut from = 0;
+        while let Some(rel) = lower[from..].find(scheme) {
+            let start = from + rel + scheme.len();
+            let rest = &lower[start..];
+            // Credentials are `user:password@` before the host.
+            if let Some(at) = rest.find('@') {
+                let userinfo = &rest[..at];
+                if let Some(colon) = userinfo.find(':') {
+                    let password = &userinfo[colon + 1..];
+                    let placeholder = [
+                        "password", "passwd", "xxx", "your_", "example",
+                        "test", "changeme", "todo", "<", "$", "{",
+                    ];
+                    // Only exact placeholder words, not substrings: real
+                    // passwords like "password123" must still be caught.
+                    let is_placeholder = placeholder.iter().any(|p| password == *p)
+                        || password.starts_with("${");
+                    if !password.is_empty() && !is_placeholder && password.len() >= 3 {
+                        return Some("database connection URI contains inline password");
+                    }
+                }
+            }
+            from = start;
+        }
+    }
+    None
+}
+
 /// Is the assignment target a credential key? Exact words plus a suffix
 /// pattern (`_key`, `_secret`, ...). The underscore prefix matters: `MONKEY`
 /// ends in "key" but is not a credential, while `chat_key` and `CHAT_AES_KEY`
@@ -235,6 +279,19 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         if in_test[i] {
             continue;
         }
+
+        // A DB connection URI with an inline password is a credential leak
+        // regardless of the variable name (`engine = create_engine("...")`).
+        // This is a VALUE-format signal, checked before key-name logic.
+        if let Some(note) = uri_with_password(line) {
+            return Some(Finding {
+                id: "secrets.hardcoded",
+                verdict: Verdict::Fail,
+                evidence: format!("{}:{}", file.path, i + 1),
+                note: note.into(),
+            });
+        }
+
         // Find an assignment operator outside strings/comments. Both `=` (let
         // / property assignment) and `:` (object literal property) count —
         // `JWT_SECRET: process.env.JWT_SECRET || "literal"` is a real shape.

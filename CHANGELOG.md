@@ -162,3 +162,15 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 重扫 AI 代码三个问题全部检出，三个真实框架零误报，48→51 测试全过。三个 AI 场景进 mutation（8→10）和 real_world 回归。
 
 写了 `AI-CODE.md` 诚实记录：信号型规则对 AI 代码有用（这次 3 个真问题），但 5 条声明型规则对 AI 完全无效（AI 不知道 `key=off` 语法）。不承认这个边界就是自欺。
+
+## 第 15 轮：第二批 AI 代码 + 假绿灯修复
+
+继续 AI 自测：又写 4 个领域服务（认证/数据库/上传/日志）。auth 的硬编码 JWT secret 抓到；db 的 `postgresql://admin:password123@localhost/prod` 漏检——变量名是 engine，键名规则看不见。upload 的无认证文件上传超出规则范围，logging 的无集中错误追踪则触发了声明型规则的假绿灯。
+
+修两个问题：
+
+1. 连接串明文密码检测：`scheme://user:password@host` 是值格式信号，不依赖键名。限定数据库连接串（postgres/mysql/mongodb 等），跳过 https 基本认证。踩坑：占位符判断最初用子串包含，把 `password123` 当占位符跳过了；改成精确相等后正确。真实框架和自举零回归。
+
+2. UNCONFIRMED 判定：声明型规则（5 条）没看到 opt-out 时不再报 PASS，改为 UNCONFIRMED——"没人声明"不等于"防护到位"。不阻塞构建（passed() 仍只看 FAIL），但报告里明确可见。信号型规则保持 PASS。这是第 8 轮"扫 0 文件假绿灯"的同类修复。
+
+新增 tests/unconfirmed.rs 4 个测试 + real_world 2 个连接串测试。57 测试全过，clippy 干净，自举 PASS，mutation 10/10，cases 8/8。README 加了六种 verdict 的说明表，AI-CODE.md 补了第二批数据和假绿灯分析。

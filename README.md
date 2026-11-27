@@ -52,6 +52,19 @@ cargo build --offline
 }
 ```
 
+`verdict` 有六种，区分得很细：
+
+| verdict | 含义 | 阻塞构建 |
+|---|---|---|
+| `PASS` | 信号型规则扫了代码，没发现危险写法 | 否 |
+| `FAIL` | 发现问题 | **是** |
+| `BASELINE` | 已知问题，记录在 baseline 里 | 否 |
+| `UNCONFIRMED` | 声明型规则没看到 opt-out 标记——**不代表防护到位**，只代表没人声明 | 否 |
+| `NOT-ASSESSED` | 规则不适用于当前 surface（如 Web 规则对 CLI 项目） | 否 |
+| `config.no-sources` | 扫描到 0 个源码文件，配置错误 | **是** |
+
+`UNCONFIRMED` 是刻意设计的：静态扫描推断不了运行时，没人写 `prodgate: rate_limit=off` 不等于限流真的存在。把它报成 PASS 是假绿灯。
+
 `replay`、`cases`、`all` 的 JSON 也有同样的 `tool` / `command` / `passed` 三个顶层字段。脚本只读 `passed` 就行，不用解析文本。退出码仍然和 `passed` 一致：通过是 0，失败是 1。
 
 扫别的项目时加上路径：`./target/debug/prodgate gate /path/to/project`。被扫的项目可以用 `prodgate.conf` 声明扫描哪些目录、属于什么形态：
