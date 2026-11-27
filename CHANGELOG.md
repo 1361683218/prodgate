@@ -385,3 +385,17 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 3. baseline 文件加审计头（recorded_at_unix / count / 20 issue cap）
 
 实测：25 条冻结 → all exit=1，"OVER LIMIT — gate bypass suspected"；0 条 → exit=0。新增 tests/baseline_guard.rs 4 测试（含"gate 被骗但 all 必须拒绝"的红队断言），report 测试加守卫防字段被删。119 测试全过，clippy 干净，六门全 PASS。
+
+## 第 38 轮：裁判红队审计（用户"要把好关"的延续）
+
+用户说要把好关，上一轮堵了 baseline，这轮系统审其余攻击面。真跑攻击实验不靠推理：
+
+- 删一条规则 → mutation + cases 失败，挡住
+- 规则还在但永远返回 None → replay/mutation/cases 全失败，挡住
+- roots 指向不存在 → no-sources 挡住
+- surface 篡改 → 部分挡住（regression/cases/mutation 用固定 web surface，不受项目配置影响）
+- 改测试/裁判文件本身 → 挡不住，靠 git 保护分支 + CI 干净 checkout
+
+关键发现：规则篡改之所以被挡，是因为 mutation/cases 有**独立期望集**，不依赖 all_rules()。前面 37 轮无意中建成了纵深防御——没有任何单层充分，但交叉验证有效。
+
+报告写进 REDTEAM.md，诚实标注不可修的攻击面。原则：本地 all 是 AI 的自我检查，不是安全边界；CI + git 权限才是。
