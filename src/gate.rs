@@ -127,11 +127,8 @@ fn collect_findings(rule: &crate::check::Rule, file: &SourceFile, ctx: &RuleCtx<
 /// Can this rule be evaluated on the declared surface? Shared by gate and
 /// prompt generation: a rule reported NOT-ASSESSED by the gate must not be
 /// presented as actionable guidance to the AI writing the code.
-pub fn applies_to_surface(rule_id: &str, surface: &str) -> bool {
-    match rule_id {
-        "cors.wildcard" | "rate.limit" | "webhook.idempotency" | "rls" => surface == "web",
-        _ => true,
-    }
+pub fn applies_to_surface(rule: &crate::check::Rule, surface: &str) -> bool {
+    !rule.web_only || surface == "web"
 }
 
 #[derive(Debug, Clone)]
@@ -285,7 +282,7 @@ fn run_gate_raw(root: &Path) -> GateReport {
         // A rule that cannot be evaluated on this surface is NOT-ASSESSED,
         // never silently skipped. Shared with prompt generation so both
         // agree on which controls matter for this project.
-        let applicable = applies_to_surface(rule.id, &cfg.surface);
+        let applicable = applies_to_surface(&rule, &cfg.surface);
         if !applicable {
             findings.push(Finding {
                 id: rule.id,

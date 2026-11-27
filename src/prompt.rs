@@ -32,6 +32,7 @@ fn trim_for_prompt(text: &str) -> String {
 struct RuleBlock {
     id: &'static str,
     description: &'static str,
+    web_only: bool,
     suggestion: Option<&'static str>,
     bad: Option<String>,
     good: Option<String>,
@@ -66,6 +67,7 @@ fn collect_blocks(root: &Path) -> Vec<RuleBlock> {
         out.push(RuleBlock {
             id: rule.id,
             description: rule.description,
+            web_only: rule.web_only,
             suggestion: None,
             bad,
             good,
@@ -103,7 +105,7 @@ pub fn render(root: &Path, surface: &str) -> String {
 
     let blocks = collect_blocks(root);
     for (i, mut b) in blocks.into_iter().enumerate() {
-        if !crate::gate::applies_to_surface(b.id, surface) {
+        if b.web_only && surface != "web" {
             out.push_str(&format!(
                 "## {}. {} — NOT APPLICABLE (this is a `{}` project)\n\n",
                 i + 1, b.id, surface
@@ -156,7 +158,7 @@ pub fn sections(root: &Path, surface: &str) -> Vec<crate::json::Json> {
                 ("id".into(), Json::Str(b.id.into())),
                 (
                     "applicable".into(),
-                    Json::Bool(crate::gate::applies_to_surface(b.id, surface)),
+                    Json::Bool(!b.web_only || surface == "web"),
                 ),
                 ("description".into(), Json::Str(b.description.into())),
                 (

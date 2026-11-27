@@ -51,7 +51,9 @@ fn json_prompt_has_structured_sections() {
 #[test]
 fn cli_prompt_marks_web_rules_not_applicable() {
     let cli = prompt::render(root(), "cli");
-    for web_rule in ["cors.wildcard", "rate.limit", "webhook.idempotency", "rls"] {
+    let web_rules: Vec<_> = all_rules().iter().filter(|r| r.web_only).map(|r| r.id).collect();
+    assert!(web_rules.len() >= 4, "expected several web-only rules");
+    for web_rule in web_rules {
         assert!(
             cli.contains(&format!("{} — NOT APPLICABLE", web_rule)),
             "{} should be marked N/A on cli surface",
@@ -93,9 +95,9 @@ fn surface_applicability_is_shared_with_gate() {
     std::fs::write(dir.join("prodgate.conf"), "roots=src\nsurface=cli\n").unwrap();
     std::fs::write(dir.join("src/app.rs"), "fn main() {}\n").unwrap();
     let report = prodgate::gate::run_gate(&dir);
-    for id in ["cors.wildcard", "rate.limit", "webhook.idempotency", "rls"] {
-        let f = report.findings.iter().find(|f| f.id == id).unwrap();
-        assert_eq!(f.verdict, Verdict::NotAssessed, "{} should be NOT-ASSESSED on cli", id);
+    for rule in all_rules().iter().filter(|r| r.web_only) {
+        let f = report.findings.iter().find(|f| f.id == rule.id).unwrap();
+        assert_eq!(f.verdict, Verdict::NotAssessed, "{} should be NOT-ASSESSED on cli", rule.id);
     }
     std::fs::remove_dir_all(&dir).ok();
 }

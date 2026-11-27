@@ -74,6 +74,10 @@ pub struct Rule {
     pub id: &'static str,
     pub description: &'static str,
     pub kind: RuleKind,
+    /// Only meaningful for `surface=web` projects. Gates mark it
+    /// NOT-ASSESSED elsewhere; prompts mark it NOT APPLICABLE. Derived from
+    /// this field in both places — no second hardcoded list to drift.
+    pub web_only: bool,
     pub run: RuleFn,
 }
 
@@ -655,20 +659,20 @@ fn sql_injection(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
 
 pub fn all_rules() -> Vec<Rule> {
     vec![
-        Rule { id: "cors.wildcard", kind: RuleKind::Signal, description: "No wildcard CORS origin", run: cors_wildcard },
-        Rule { id: "secrets.hardcoded", kind: RuleKind::Signal, description: "No hardcoded credential literals", run: secrets_hardcoded },
-        Rule { id: "sql.injection", kind: RuleKind::Signal, description: "No SQL built from string interpolation", run: sql_injection },
-        Rule { id: "rate.limit", kind: RuleKind::Declaration, description: "Rate limiting not explicitly disabled", run: rate_limit_off },
-        Rule { id: "error.tracking", kind: RuleKind::Declaration, description: "Error tracking not explicitly disabled", run: error_tracking_off },
-        Rule { id: "webhook.idempotency", kind: RuleKind::Declaration, description: "Webhook idempotency not explicitly disabled", run: webhook_idempotency_off },
-        Rule { id: "rls", kind: RuleKind::Declaration, description: "Row level security not explicitly disabled", run: rls_off },
-        Rule { id: "backup", kind: RuleKind::Declaration, description: "Backup not explicitly disabled", run: backup_off },
-        Rule { id: "eval.injection", kind: RuleKind::Signal, description: "No eval/exec on request data", run: crate::rules_security::eval_injection },
-        Rule { id: "unsafe.deserialization", kind: RuleKind::Signal, description: "No unsafe deserialization of untrusted input", run: crate::rules_security::unsafe_deserialization },
-        Rule { id: "weak.crypto", kind: RuleKind::Signal, description: "No fast hash for password storage", run: crate::rules_security::weak_crypto },
-        Rule { id: "jwt.algorithm", kind: RuleKind::Signal, description: "JWT verification must not accept none", run: crate::rules_security::jwt_algorithm },
-        Rule { id: "path.traversal", kind: RuleKind::Signal, description: "No user-controlled value in filesystem path", run: crate::rules_security::path_traversal },
-        Rule { id: "shell.injection", kind: RuleKind::Signal, description: "No shell=True with interpolated command", run: crate::rules_security::shell_injection },
-        Rule { id: "credential.logging", kind: RuleKind::Signal, description: "No credentials written to logs", run: crate::rules_security::credential_logging },
+        Rule { id: "cors.wildcard", kind: RuleKind::Signal, description: "No wildcard CORS origin", web_only: true, run: cors_wildcard },
+        Rule { id: "secrets.hardcoded", kind: RuleKind::Signal, description: "No hardcoded credential literals", web_only: false, run: secrets_hardcoded },
+        Rule { id: "sql.injection", kind: RuleKind::Signal, description: "No SQL built from string interpolation", web_only: false, run: sql_injection },
+        Rule { id: "rate.limit", kind: RuleKind::Declaration, description: "Rate limiting not explicitly disabled", web_only: true, run: rate_limit_off },
+        Rule { id: "error.tracking", kind: RuleKind::Declaration, description: "Error tracking not explicitly disabled", web_only: false, run: error_tracking_off },
+        Rule { id: "webhook.idempotency", kind: RuleKind::Declaration, description: "Webhook idempotency not explicitly disabled", web_only: true, run: webhook_idempotency_off },
+        Rule { id: "rls", kind: RuleKind::Declaration, description: "Row level security not explicitly disabled", web_only: true, run: rls_off },
+        Rule { id: "backup", kind: RuleKind::Declaration, description: "Backup not explicitly disabled", web_only: false, run: backup_off },
+        Rule { id: "eval.injection", kind: RuleKind::Signal, description: "No eval/exec on request data", web_only: false, run: crate::rules_security::eval_injection },
+        Rule { id: "unsafe.deserialization", kind: RuleKind::Signal, description: "No unsafe deserialization of untrusted input", web_only: false, run: crate::rules_security::unsafe_deserialization },
+        Rule { id: "weak.crypto", kind: RuleKind::Signal, description: "No fast hash for password storage", web_only: false, run: crate::rules_security::weak_crypto },
+        Rule { id: "jwt.algorithm", kind: RuleKind::Signal, description: "JWT verification must not accept none", web_only: false, run: crate::rules_security::jwt_algorithm },
+        Rule { id: "path.traversal", kind: RuleKind::Signal, description: "No user-controlled value in filesystem path", web_only: false, run: crate::rules_security::path_traversal },
+        Rule { id: "shell.injection", kind: RuleKind::Signal, description: "No shell=True with interpolated command", web_only: false, run: crate::rules_security::shell_injection },
+        Rule { id: "credential.logging", kind: RuleKind::Signal, description: "No credentials written to logs", web_only: false, run: crate::rules_security::credential_logging },
     ]
 }

@@ -263,3 +263,11 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 给 Rule 加 kind: RuleKind（Signal/Declaration）元数据，gate 和 docs 测试全从它读，硬编码清单删除。新增 tests/rule_kind.rs 3 测试：每条规则的 kind 与无信号时的实际 verdict 一致（标错就挂）、两种 kind 都用到了、声明型不把字符串里的 opt-out 当声明。
 
 86 测试全过，自举 PASS。
+
+## 第 25 轮：surface 判定收进规则元数据
+
+最后一处重复硬编码：gate.rs 的 applies_to_surface 写死 4 条 web 规则，tests/prompt.rs 两处重列，README 写"4 条 Web 规则"。新增 web-only 规则忘同步，prompt 会在 CLI 项目里把它当可执行建议——误导 AI。
+
+给 Rule 加 web_only: bool，applies_to_surface 改为从 Rule 读，RuleBlock 也直接存该字段（避免反复查 all_rules）。tests/prompt.rs 从元数据推导 web 规则清单，README 不再写死数字。
+
+至此"单一事实源"收敛完成：规则类型（kind）、适用 surface（web_only）、判定位置、文档数字、baseline 身份、案例来源全部单一来源 + 测试守卫。86 测试全过，clippy 干净，自举 PASS。
