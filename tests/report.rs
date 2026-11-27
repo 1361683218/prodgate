@@ -102,6 +102,10 @@ fn all_json_aggregates_every_guard() {
     for guard in ["replay", "mutation", "gate", "cases", "regression", "efficacy"] {
         assert!(doc.get(guard).is_some(), "all_json must aggregate {}", guard);
     }
+    // Baseline abuse guard must stay in the aggregate — an AI with shell
+    // access can freeze FAILs, so the count has to be visible to CI.
+    assert!(doc.get("baseline_count").is_some(), "all_json must report frozen baseline count");
+    assert!(doc.get("baseline_limit").is_some(), "all_json must report the baseline cap");
     assert_eq!(doc.get("command").and_then(Json::as_str), Some("all"));
 
     // Gating guards must pass; efficacy is informational but reported.

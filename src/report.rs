@@ -162,13 +162,20 @@ pub fn all_json(root: &Path) -> Json {
             .map(|v| matches!(v, Json::Bool(true)))
             .unwrap_or(false)
     };
+    // Baseline abuse guard: an AI with shell access can freeze every FAIL
+    // with `prodgate baseline`. A small baseline is legitimate (gradual
+    // adoption); a large one means the gate is being bypassed. Surface the
+    // count AND refuse to call an oversized baseline a pass.
+    let baseline_count = gate::load_baseline(root).len();
+    let baseline_ok = baseline_count <= gate::MAX_BASELINE;
     // Every guard must pass. A false positive reintroduced by a rule change
     // fails `regression`, even if replay/gate still look fine.
     let passed = is_true(&replay)
         && is_true(&mutation)
         && is_true(&gate)
         && is_true(&cases)
-        && is_true(&regression);
+        && is_true(&regression)
+        && baseline_ok;
     Json::Obj(vec![
         ("tool".into(), s("prodgate")),
         ("command".into(), s("all")),
@@ -178,6 +185,8 @@ pub fn all_json(root: &Path) -> Json {
         ("gate".into(), gate),
         ("cases".into(), cases),
         ("regression".into(), regression),
+        ("baseline_count".into(), Json::Num(baseline_count as f64)),
+        ("baseline_limit".into(), Json::Num(gate::MAX_BASELINE as f64)),
         ("efficacy".into(), efficacy),
     ])
 }

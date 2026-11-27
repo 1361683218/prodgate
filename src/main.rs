@@ -444,7 +444,19 @@ fn main() {
                 let r = print_regression();
                 println!();
                 print_efficacy_summary();
-                a && m && b && c && r
+                // A baseline can flip FAIL to PASS without changing code.
+                // Always show how many issues are frozen, and fail loudly if
+                // the project has quietly accumulated a backlog.
+                let frozen = gate::load_baseline(root).len();
+                let limit = gate::MAX_BASELINE;
+                println!(
+                    "baseline frozen        : {}/{} ({} {})",
+                    frozen,
+                    limit,
+                    if frozen > limit { "OVER LIMIT" } else { "within limit" },
+                    if frozen > limit { "— gate bypass suspected" } else { "" }
+                );
+                a && m && b && c && r && frozen <= limit
             }
             _ => unreachable!(),
         }

@@ -56,6 +56,13 @@ fn baseline_path(root: &Path) -> std::path::PathBuf {
     root.join(BASELINE_FILE)
 }
 
+/// A baseline small enough to be a pragmatic adoption aid. Beyond this a
+/// project is not "gradually adopting the gate" — it is hiding a backlog,
+/// and `all` must refuse to call that a pass. Red-team check: an AI with a
+/// shell can run `prodgate baseline` to freeze every FAIL; the cap turns
+/// that from a silent win into a loud FAIL.
+pub const MAX_BASELINE: usize = 20;
+
 pub fn load_baseline(root: &Path) -> HashSet<String> {
     fs::read_to_string(baseline_path(root))
         .map(|text| {
@@ -80,7 +87,19 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
         .map(|f| fingerprint(f, root))
         .collect();
 
-    let mut text = String::from("# prodgate baseline — known issues, shrink only\n");
+    // Audit header: a baseline is a deliberate decision to hide issues.
+    // Record when and how many, so a reviewer can tell gradual adoption
+    // from a freeze-everything shortcut.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut text = format!(
+        "# prodgate baseline — known issues, shrink only\n\
+         # recorded_at_unix={} count={}\n\
+         # frozen issues are reported non-blocking; ALL enforces a {} issue cap\n",
+        now, issues.len(), MAX_BASELINE
+    );
     for d in &issues {
         text.push_str(d);
         text.push('\n');

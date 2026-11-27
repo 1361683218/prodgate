@@ -374,3 +374,14 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 3. 时区细节——UTC 显示而本地+8，裁判测不到没写进去的人类验收点。
 
 实验报告 loop/EXPERIMENT.md。115 测试全过，六门全 PASS。
+
+## 第 37 轮：baseline 滥用防线（用户"要把好关"）
+
+用户强调 prodgate 是裁判，要把好关。红队视角审：有完整 shell 权限的 AI 能跑 `prodgate baseline` 把所有 FAIL 冻结成 BASELINE，代码一字未改却全绿——实测 2 个 eval 问题，baseline 后 gate PASS。MCP 没暴露 baseline，但 Ralph Loop 的 agent 有 shell，CLI 就能用。
+
+不删功能（人类渐进接入合法），加三道关：
+1. `all` 的 JSON/文本显式报 baseline 数量（baseline_count / baseline_limit）
+2. 超 20 条直接 FAIL（少量是渐进接入，大量是绕过门禁）
+3. baseline 文件加审计头（recorded_at_unix / count / 20 issue cap）
+
+实测：25 条冻结 → all exit=1，"OVER LIMIT — gate bypass suspected"；0 条 → exit=0。新增 tests/baseline_guard.rs 4 测试（含"gate 被骗但 all 必须拒绝"的红队断言），report 测试加守卫防字段被删。119 测试全过，clippy 干净，六门全 PASS。
