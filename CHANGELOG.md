@@ -82,3 +82,15 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 七类误报全部写进 `tests/real_world.rs` 做回归。全套 34 个测试通过。
 
 写了 `BENCHMARK.md` 诚实记录结果和局限：声明型规则在真实项目上基本不触发（因为没有 `key=off` 标记），secrets 规则为压误报牺牲了召回率，基准规模还小且只有 Rust。下一轮应该扫不同语言和 surface=web 的项目。
+
+## 第 9 轮：多语言 Web 验证 + CORS 漏检修复
+
+按 BENCHMARK 的下一步扫了三个真实 Web 框架：expressjs/express（JS）、pallets/flask（Python）、gin-gonic/gin（Go），共 129 文件，surface=web。4 条 Web 规则首次被真实评估，全部无信号（这三个核心库都没有 CORS 实现，符合预期）。
+
+关键收获是做了受控注入实验：往真实项目里注入已知危险的 CORS 代码。注入 Express 的 `res.setHeader('Access-Control-Allow-Origin', '*')` 后规则没报——真漏检。根因和上一轮 secrets 误报同构：规则对"值怎么和键关联"的假设太窄，只认 `:` 和 `=`，不认函数调用的逗号传参。
+
+修法不是继续列举分隔符，而是换判断维度：找带引号的 `'*'` 作为值（排除 `=== '*'` 比较），要求 origin 关键词在同一或相邻代码行。修完三种语言的真实写法全部检出（express:85、flask:1690、gin:863），恢复后回到 PASS。
+
+方法论结论写进 BENCHMARK：只扫真实项目会给你虚假的安全感，必须做受控注入才能发现漏检。以后每条规则都要双向验证。
+
+新增 3 个回归测试（real_world.rs 从 7 到 10）。全套 37 测试通过，clippy 干净，自举 PASS。

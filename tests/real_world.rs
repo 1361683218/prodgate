@@ -93,3 +93,39 @@ fn wildcard_cors_across_two_lines_from_real_diff() {
         Verdict::Fail
     );
 }
+
+#[test]
+fn wildcard_cors_as_function_argument() {
+    // Real Express pattern injected into expressjs/express:
+    //   res.setHeader('Access-Control-Allow-Origin', '*')
+    // The key and '*' are function arguments separated by a comma, not by
+    // `:` or `=`. The original rule only recognized assignment syntax.
+    let src = "app.use(function(req, res, next) {\n  res.setHeader('Access-Control-Allow-Origin', '*');\n  next();\n});";
+    assert_eq!(
+        verdict_web("cors.wildcard", "lib/express.js", src),
+        Verdict::Fail,
+        "setHeader(name, '*') is a real wildcard CORS configuration"
+    );
+}
+
+#[test]
+fn comparison_with_wildcard_is_not_a_configuration() {
+    // Must stay PASS: checking a value is not setting it.
+    let src = "if (options.origin === '*') { return; }";
+    assert_eq!(
+        verdict_web("cors.wildcard", "lib/index.js", src),
+        Verdict::Pass
+    );
+}
+
+#[test]
+fn wildcard_cors_in_python_and_go_real_styles() {
+    // Injected into real flask/app.py and gin/gin.go during the web benchmark.
+    let py = "response.headers['Access-Control-Allow-Origin'] = '*'";
+    assert_eq!(
+        verdict_web("cors.wildcard", "src/flask/app.py", py),
+        Verdict::Fail
+    );
+    let go = "c.Header(\"Access-Control-Allow-Origin\", \"*\")";
+    assert_eq!(verdict_web("cors.wildcard", "gin.go", go), Verdict::Fail);
+}

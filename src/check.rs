@@ -73,13 +73,12 @@ fn prefixed(value: &str) -> bool {
 /// Signal rule: inspects every line. Wildcard CORS is dangerous even in a
 /// string, because strings get used as header values.
 fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
-    // Origin key and wildcard value may be on separate lines in real code
-    // (e.g. expressjs/cors: key: 'Access-Control-Allow-Origin' / value: '*').
-    // Scan a two-line window; skip comment lines so documentation does not
-    // count as configuration.
-    // Collect only code lines (comments excluded), keeping their original
-    // line numbers, then look for an origin key and a wildcard in adjacent
-    // code lines — real code puts them on separate lines.
+    // How the origin key and the wildcard are connected varies a lot in real
+    // code: `origin: '*'`, `origin = '*'`, or `setHeader('...Origin', '*')`
+    // where they are function arguments separated by a comma. Matching one
+    // specific operator misses real configurations. Instead: find a quoted
+    // '*' used as a VALUE (not the object of a comparison), and require an
+    // origin keyword in the same or adjacent code line.
     let code: Vec<(usize, &str)> = file
         .lines
         .iter()
@@ -91,34 +90,36 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         .map(|(i, line)| (i + 1, line.as_str()))
         .collect();
 
-    // A wildcard is dangerous when it is ASSIGNED as an origin value, not
-    // when it appears in a comparison (options.origin === '*' is a check).
-    // Match a quoted '*' immediately after an assignment operator.
-    let is_wildcard_assignment = |line: &str| -> bool {
+    let has_origin = |line: &str| {
+        has_any(line, &["cors", "alloworigin", "allow_origin", "origin"])
+    };
+
+    // A quoted '*' that is being compared (`=== '*'`) is a read, not a
+    // configuration. Everything else (after `:` `=` or `,` or inside a
+    // string literal like "Origin: *") can be a value.
+    let wildcard_as_value = |line: &str| -> bool {
+        for needle in ["'*'", "\"*\""] {
+            let mut from = 0;
+            while let Some(rel) = line[from..].find(needle) {
+                let pos = from + rel;
+                let before = line[..pos].trim_end();
+                let is_comparison = before.ends_with("==")
+                    || before.ends_with("===")
+                    || before.ends_with("!=")
+                    || before.ends_with("!==")
+                    || before.ends_with(">=")
+                    || before.ends_with("<=");
+                if !is_comparison {
+                    return true;
+                }
+                from = pos + needle.len();
+            }
+        }
+        // Bare `Origin: *` without quotes, as in header strings.
         let lower = line.to_lowercase();
-        let bytes = lower.as_bytes();
-        for (pos, ch) in bytes.iter().enumerate() {
-            if *ch != b':' && *ch != b'=' {
-                continue;
-            }
-            // Skip comparison chains: '===' / '==' / '!=' / '>=' are reads,
-            // not assignments. Only a lone '=' or ':' counts.
-            if *ch == b'=' {
-                if pos > 0 && matches!(bytes[pos - 1], b'=' | b'!' | b'>' | b'<') {
-                    continue;
-                }
-                if bytes.get(pos + 1) == Some(&b'=') {
-                    continue;
-                }
-            }
-            let after = lower[pos + 1..].trim_start();
-            if after.starts_with("'*'") || after.starts_with("\"*\"") {
-                return true;
-            }
-            // Also catch "Origin: *" inside a string literal.
-            if after.starts_with('*')
-                && after[1..].trim_start().starts_with(['\'', '"'])
-            {
+        for (i, _) in lower.match_indices('*') {
+            let before = lower[..i].trim_end();
+            if before.ends_with(':') || before.ends_with('=') {
                 return true;
             }
         }
@@ -126,15 +127,37 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     };
 
     for w in code.windows(2) {
-        let window = format!("{} {}", w[0].1, w[1].1);
-        if !has_any(&window, &["cors", "alloworigin", "allow_origin", "origin"]) {
-            continue;
-        }
-        if is_wildcard_assignment(w[0].1) || is_wildcard_assignment(w[1].1) {
+        let (first_no, first) = w[0];
+        let (second_no, second) = w[1];
+        // Same line: origin keyword and wildcard value together.
+        if has_origin(first) && wildcard_as_value(first) {
             return Some(Finding {
                 id: "cors.wildcard",
                 verdict: Verdict::Fail,
-                evidence: format!("{}:{}", file.path, w[0].0),
+                evidence: format!("{}:{}", file.path, first_no),
+                note: "wildcard assigned as CORS origin".into(),
+            });
+        }
+        // Adjacent lines: key on one line, wildcard value on the next.
+        if (has_origin(first) && wildcard_as_value(second))
+            || (has_origin(second) && wildcard_as_value(first))
+        {
+            return Some(Finding {
+                id: "cors.wildcard",
+                verdict: Verdict::Fail,
+                evidence: format!("{}:{}", file.path, first_no),
+                note: "wildcard assigned as CORS origin".into(),
+            });
+        }
+        // Last line has no window partner; check it alone below.
+        let _ = second_no;
+    }
+    if let Some((no, line)) = code.last() {
+        if has_origin(line) && wildcard_as_value(line) {
+            return Some(Finding {
+                id: "cors.wildcard",
+                verdict: Verdict::Fail,
+                evidence: format!("{}:{}", file.path, no),
                 note: "wildcard assigned as CORS origin".into(),
             });
         }

@@ -74,8 +74,56 @@ recursive=true
 
 ```bash
 cargo build --offline
-cargo test --offline                    # 34 个测试，含 7 个真实世界回归
+cargo test --offline                    # 37 个测试，含 10 个真实世界回归
 cargo run --offline -- gate --json <项目路径>
 ```
 
 被扫项目需要临时放一个 `prodgate.conf` 声明 roots / surface / recursive。基准脚本没有写成命令，因为不同项目的布局判断仍需人工确认——把这个判断自动化本身就是另一轮工作。
+
+## 第二轮：多语言 Web 项目
+
+第一轮全是 cli surface 的 Rust 项目，4 条 Web 规则没被评估过。这轮浅克隆三个真实 Web 框架，用 `surface=web` 扫描。
+
+| 项目 | 语言 | roots | 文件数 | 结果 |
+|---|---|---|---|---|
+| expressjs/express | JavaScript | lib | 6 | PASS |
+| pallets/flask | Python | src | 24 | PASS |
+| gin-gonic/gin | Go | .（递归） | 99 | PASS |
+
+三个核心库都没有 CORS 实现（CORS 是独立中间件），所以"无信号"是正确结果。4 条 Web 规则在这次扫描中确实被评估了（不是 NOT-ASSESSED），只是没检出东西。
+
+### 受控注入实验：找出真漏检
+
+扫描真实项目只能验证"不误报"，验证不了"能检出"。我做了受控实验：往真实项目里注入已知的危险代码，看规则抓不抓得到。
+
+第一次注入 Express 的典型写法：
+
+```js
+res.setHeader('Access-Control-Allow-Origin', '*');
+```
+
+**规则没报。** 这是个真 bug，玩具样本从没覆盖。根因是规则只认 `origin: '*'` 或 `origin = '*'` 这种赋值，而真实代码是函数调用传参——origin 名和通配符之间是逗号，没有 `=` 或 `:`。
+
+这和上一轮 secrets 的误报是同一类结构问题：**规则对"值怎么和键关联"的假设太窄**。上轮是"扫整行找等号"，这轮是"只认两种运算符"。
+
+修法不再是列举分隔符，而是换个判断维度：找带引号的 `'*'` 作为值出现（排除 `=== '*'` 这类比较），并要求 origin 关键词在同一行或相邻代码行。这样 `origin: '*'`、`origin = '*'`、`setHeader('...Origin', '*')`、`headers['...Origin'] = '*'` 全都能覆盖。
+
+修完重做实验：
+
+| 注入目标 | 真实写法 | 结果 |
+|---|---|---|
+| express/lib/express.js | `res.setHeader('Access-Control-Allow-Origin', '*')` | FAIL `lib/express.js:85` |
+| flask/src/flask/app.py | `response.headers['Access-Control-Allow-Origin'] = '*'` | FAIL `src/flask/app.py:1690` |
+| gin/gin.go | `c.Header("Access-Control-Allow-Origin", "*")` | FAIL `gin.go:863` |
+
+三种语言的真实写法全部检出，行号准确。恢复原文件后全部回到 PASS。这也是跨语言 adapter 第一次在正向检出上得到验证（之前只验证过 opt-out 声明的识别）。
+
+新增 3 个回归测试到 `tests/real_world.rs`：函数参数形式、比较不算配置、Python/Go 写法。全套 37 个测试通过。
+
+## 两轮基准的方法论收获
+
+**只扫真实项目会给你虚假的安全感。** 三轮框架全是 PASS，看起来很美好，但它们没有 CORS 代码。真正的验证是受控注入：把已知危险代码放进真实结构里，看规则抓不抓得到。这一步发现了规则最严重的缺陷（漏检），而单纯扫描永远不会发现。
+
+以后每加一条规则，都要做两件事：扫真实项目确认不误报，注入已知坏样本确认能检出。只有一边是不够的。
+
+**连续打补丁时要停下来。** 两轮各出现了一次"修一个冒出下一个"：secrets 连修五次、CORS 从赋值到函数参数。两次的正确解法都不是继续加特例，而是重新审视规则的基本假设。
