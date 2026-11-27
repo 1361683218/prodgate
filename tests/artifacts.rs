@@ -127,3 +127,26 @@ fn all_gate_inherits_artifact_failure() {
     }
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn judge_files_cannot_be_declared_as_artifacts() {
+    // Pointing a required artifact at an existing judge file manufactures a
+    // pass: the file exists and is non-empty, but the agent produced nothing.
+    let dir = project();
+    fs::create_dir_all(dir.join("tests")).unwrap();
+    fs::write(dir.join("tests/fake.rs"), "fn fake() {}\n").unwrap();
+    manifest(&dir, &["phase1\trequired\ttests/fake.rs"]);
+    let r = artifacts::check_root(&dir);
+    assert!(!r.passed());
+    assert!(r.failures[0].contains("judge apparatus"));
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn manifest_itself_cannot_be_an_artifact() {
+    let dir = project();
+    fs::write(dir.join("artifacts.tsv"), "phase1\trequired\tartifacts.tsv\n").unwrap();
+    let r = artifacts::check_root(&dir);
+    assert!(!r.passed(), "self-referential artifact is a fake pass");
+    fs::remove_dir_all(&dir).ok();
+}

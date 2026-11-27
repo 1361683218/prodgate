@@ -94,3 +94,17 @@ Settings → Branches → Add branch ruleset for master
 - `| tee` 不加 pipefail 是假绿灯制造机——这正是本项目存在的意义，结果在自己 CI 上栽了
 
 现在状态：分支保护已开、CODEOWNERS 已声明、CI 全绿、judge 文件变更会告警。红队报告里的攻击 6 防线从"空"变成"实"。
+
+## 第七道门禁自身的边界（2026-11-28 端到端实验发现）
+
+用合并后的完整体系真实跑了一轮 Ralph Loop（全新上下文 AI + artifacts.tsv + 七道门禁），跑通后发现一个语义漏洞：
+
+**artifact 门禁验证"文件存在且非空"，不验证"本阶段真的产出了它"。** AI 可以零产出、把 `required` 产物指向任意已存在文件（README.md、prodgate.conf）拿到 artifacts PASS。实测成立。
+
+为什么在完整体系里危害有限：业务门禁（gate）独立运行——AI 该修的 bug 没修，gate 就 FAIL，`all` 整体 FAIL。假产物声明必须配合"业务门禁本来就能过"才有意义，那通常意味着没什么可攻击的。
+
+但纯产出类阶段（写文档、生成资源）没有 gate 验证，假声明是真问题。
+
+**已加固**：禁止把裁判文件（tests/、.github/workflows/、check.rs、mutation.rs 等、artifacts.tsv 自身）声明为产物——这些文件存在且非空，但作为产物是纯粹的造假。
+
+**仍未解决（诚实标注）**：无法在纯文件层面证明"这个文件是本轮写的"。真正的保证靠 git diff + CODEOWNERS review（产物出现在最近 commit 的变更里）。这是流程层的防线，不是代码层的。

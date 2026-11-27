@@ -43,6 +43,27 @@ pub fn manifest_path(root: &Path) -> PathBuf {
     root.join(MANIFEST_FILE)
 }
 
+/// Paths that may never count as a phase artifact. Pointing a required
+/// artifact at a judge file is a cheap way to manufacture a pass: the file
+/// exists and is non-empty, but the agent produced nothing. These paths are
+/// all part of the judging apparatus (see REDTEAM.md attack #6).
+const FORBIDDEN_ARTIFACT_PREFIXES: &[&str] = &[
+    "tests/",
+    ".github/workflows/",
+    "loop/judge.sh",
+    "src/check.rs",
+    "src/mutation.rs",
+    "src/cases.rs",
+    "src/fixture.rs",
+    "prodgate.conf",
+    "artifacts.tsv",
+];
+
+fn is_judge_file(raw_path: &str) -> bool {
+    let p = raw_path.trim_start_matches("./").replace('\\', "/");
+    FORBIDDEN_ARTIFACT_PREFIXES.iter().any(|f| p == *f || p.starts_with(f))
+}
+
 /// Verify artifacts named in a manifest. `root` is used to resolve relative
 /// paths so a manifest is portable across checkouts.
 pub fn check(root: &Path, manifest: &Path) -> ArtifactReport {
@@ -71,6 +92,13 @@ pub fn check(root: &Path, manifest: &Path) -> ArtifactReport {
             report.failures.push(format!(
                 "line {}: malformed entry (need phase<TAB>status<TAB>path)",
                 line_no + 1
+            ));
+            continue;
+        }
+        if is_judge_file(raw_path) {
+            report.failures.push(format!(
+                "{}: {} is judge apparatus, not a phase artifact",
+                phase, raw_path
             ));
             continue;
         }

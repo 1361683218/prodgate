@@ -419,3 +419,11 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 共同内核：完成不能由 AI 自己说了算。合并方式不是写大文档，而是让 prodgate 成为唯一裁判：新增 src/artifacts.rs 吸收协作协议 §4 的 artifact-on-disk 检查（兼容 protocol-check.sh 的 TSV 格式，not-assessed 无理由=FAIL），纳入 all_json 和文本 all 作为第七道门禁。Ralph Loop 的 judge.sh 包 prodgate all，自动继承不用改。
 
 CLI prodgate artifacts（文本+JSON）+ MCP tool。8 个测试（含 all 继承）。127 测试全过。顶层 AI-WORKFLOW.md 讲清三者怎么咬合，协作协议头部加统一视角指引。
+
+## 第 42 轮：合并后端到端实验（凌晨"继续做"）
+
+侦察发现合并后的体系从没端到端跑过（artifacts.tsv 一个真实文件都没有），且 loop/PROMPT.md 没提产物声明——第七道门禁在循环里形同虚设。更新 PROMPT.md 加产物契约，让全新上下文 AI 跑真实任务(prune 命令)。
+
+端到端跑通：AI 写码→声明 artifacts.tsv→七道门禁→COMPLETE，独立验证产物真实、judge PASS。
+
+但暴露语义漏洞：artifact 只验证"文件存在"，AI 可指向任意已存在文件蒙混。分析后没采用白名单（会破坏源码类产物正常流程），改为：禁止裁判文件作为产物（tests/workflows/check.rs/artifacts.tsv 自身等），REDTEAM.md 诚实记录边界——"本轮产出"的证明靠 git diff+CODEOWNERS，代码层做不到。新增 2 测试。129 测试、clippy 干净。
