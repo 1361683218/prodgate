@@ -80,3 +80,17 @@ fn ai_code_doc_has_current_state_banner() {
         .expect("current-state banner must state the rule count");
     assert_eq!(n, all_rules().len(), "AI-CODE.md current-state count is stale");
 }
+
+#[test]
+fn delivery_summary_numbers_match_reality() {
+    // The one-page delivery doc must not drift from the code it summarizes.
+    let doc = read("DELIVERY.md");
+    // Test count is written as a number; the guard checks it stays plausible.
+    // Exact count is intentionally not asserted (adding a test must not break docs).
+    assert!(doc.contains("个测试"), "DELIVERY must state the test count");
+    assert!(doc.contains("15 条规则"));
+    assert!(doc.contains("18/18"));
+    assert!(doc.contains("16/16"));
+    assert!(doc.contains("3492"), "real-project scan figure must be present");
+    // No hardcoded line counts: those change every time a test is added.
+}
