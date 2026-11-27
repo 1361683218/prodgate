@@ -17,10 +17,15 @@ jobs:
       # advisory-only in CI logs; real enforcement is branch protection +
       # CODEOWNERS review (see REDTEAM.md attack #6).
       - name: Flag judge-file changes
+        # Advisory only: this step must NEVER fail the build. It is an audit
+        # hint in the logs; real enforcement is CODEOWNERS + branch protection.
+        continue-on-error: true
         run: |
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^(tests/|src/(check|rules_security|mutation|cases|fixture)\.rs|loop/judge\.sh|\.github/workflows/)'; then
-            echo "::warning::This commit changes judge files — human review required (see REDTEAM.md)"
+          changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+          if [ -n "$changed" ] && echo "$changed" | grep -E '^(tests/|src/(check|rules_security|mutation|cases|fixture)\.rs|loop/judge\.sh|\.github/workflows/)'; then
+            echo "::warning::This commit changes judge files - human review required (see REDTEAM.md)"
           fi
+          exit 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
