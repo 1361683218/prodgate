@@ -47,7 +47,7 @@ cargo build --offline
   "files_scanned": 10,
   "known_issues": 0,
   "findings": [
-    { "rule": "rls", "verdict": "FAIL", "evidence": "src/db.rs:1", "note": "..." }
+    { "rule": "rls", "verdict": "FAIL", "evidence": "src/db.rs:1", "note": "...", "suggestion": "..." }
   ]
 }
 ```
@@ -64,6 +64,8 @@ cargo build --offline
 | `config.no-sources` | 扫描到 0 个源码文件，配置错误 | **是** |
 
 `UNCONFIRMED` 是刻意设计的：静态扫描推断不了运行时，没人写 `prodgate: rate_limit=off` 不等于限流真的存在。把它报成 PASS 是假绿灯。
+
+每个 FAIL 都带 `suggestion`——一句可以直接照做的修复指令。CLI 显示为 `fix:`，JSON 和 MCP 里是同文字段。这样 AI 拿到报告就知道怎么改，不用猜规则想要什么。UNCONFIRMED 和 PASS 没有建议（它们不需要动作）。
 
 `replay`、`cases`、`all` 的 JSON 也有同样的 `tool` / `command` / `passed` 三个顶层字段。脚本只读 `passed` 就行，不用解析文本。退出码仍然和 `passed` 一致：通过是 0，失败是 1。
 

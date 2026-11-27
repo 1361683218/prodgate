@@ -34,6 +34,9 @@ fn print_gate(root: &Path) -> bool {
         if f.verdict != Verdict::Pass && f.evidence != "-" {
             println!("    at {}", f.evidence);
         }
+        if let Some(fix) = f.suggestion {
+            println!("    fix: {}", fix);
+        }
     }
     let known = report
         .findings

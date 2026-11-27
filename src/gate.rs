@@ -206,6 +206,7 @@ fn run_gate_raw(root: &Path) -> GateReport {
                     cfg.roots.join(", "),
                     cfg.surface
                 ),
+                suggestion: Some("Fix roots in prodgate.conf to point at the source directory, or set recursive=true for a Cargo workspace."),
             }],
             files_scanned: 0,
         };
@@ -234,6 +235,7 @@ fn run_gate_raw(root: &Path) -> GateReport {
                     "rule targets web surface; declared surface is '{}'",
                     cfg.surface
                 ),
+                suggestion: None,
             });
             continue;
         }
@@ -263,6 +265,7 @@ fn run_gate_raw(root: &Path) -> GateReport {
                 } else {
                     format!("{} source file(s) scanned, no signal", sources.len())
                 },
+                suggestion: None,
             }
         }));
     }

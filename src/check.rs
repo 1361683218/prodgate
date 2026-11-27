@@ -2,6 +2,12 @@
 //! No external crates: we deliberately keep this buildable offline.
 
 use crate::adapter::SourceFile;
+/// Concrete, copy-pasteable fixes shared by CLI and MCP output.
+const FIX_BARE_CORS: &str = "Replace bare cors() with an explicit origin, e.g. cors({ origin: 'https://your-app.example' }). If the API is genuinely public, document that decision.";
+const FIX_CORS_LITERAL: &str = "Replace the '*' origin with the exact allowed origin(s); never combine '*' with credentials.";
+const FIX_DB_URI: &str = "Move the password out of the URI: read it from an environment variable and build the connection string at runtime. Rotate the exposed value.";
+const FIX_SECRET_LITERAL: &str = "Load the credential from an environment variable or secret manager and fail fast if missing. Remove the literal from source and rotate the exposed value.";
+const FIX_SQL: &str = "Use a parameterized query: execute(\"SELECT ... WHERE id = ?\", (user_id,)). Never interpolate values into SQL text.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
@@ -34,6 +40,9 @@ pub struct Finding {
     pub verdict: Verdict,
     pub evidence: String,
     pub note: String,
+    /// Concrete fix guidance for an AI agent or developer. None when the
+    /// finding needs human judgment (e.g. a declaration rule opt-out).
+    pub suggestion: Option<&'static str>,
 }
 
 /// Scan context. `surface` is declared by the project in prodgate.conf so a
@@ -62,7 +71,8 @@ fn has_any(line: &str, needles: &[&str]) -> bool {
 // Provider prefixes are assembled at runtime so this rules file does not
 // contain the exact strings it searches for. Self-gate must not trip on its
 // own source, and push protection must not flag the rule as a real secret.
-const PREFIX_PARTS: [&str; 5] = ["sk", "ghp", "gho", "xoxb", "AKIA"];
+// Lowercase: `prefixed()` receives a lowercased value.
+const PREFIX_PARTS: [&str; 5] = ["sk", "ghp", "gho", "xoxb", "akia"];
 const PREFIX_SUFFIXES: [&str; 5] = ["_live_", "_", "_", "-", ""];
 fn prefixed(value: &str) -> bool {
     PREFIX_PARTS
@@ -117,6 +127,7 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                         verdict: Verdict::Fail,
                         evidence: format!("{}:{}", file.path, no),
                         note: "cors() middleware uses library default wildcard origin".into(),
+                        suggestion: Some(FIX_BARE_CORS),
                     });
                 }
             }
@@ -169,6 +180,7 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, first_no),
                 note: "wildcard assigned as CORS origin".into(),
+                suggestion: Some(FIX_CORS_LITERAL),
             });
         }
         // Adjacent lines: key on one line, wildcard value on the next.
@@ -180,6 +192,7 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, first_no),
                 note: "wildcard assigned as CORS origin".into(),
+                suggestion: Some(FIX_CORS_LITERAL),
             });
         }
         // Last line has no window partner; check it alone below.
@@ -192,6 +205,7 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, no),
                 note: "wildcard assigned as CORS origin".into(),
+                suggestion: Some(FIX_CORS_LITERAL),
             });
         }
     }
@@ -301,6 +315,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, i + 1),
                 note: note.into(),
+                suggestion: Some(FIX_DB_URI),
             });
         }
 
@@ -389,6 +404,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, i + 1),
                 note: note.into(),
+                suggestion: Some(FIX_SECRET_LITERAL),
             });
         }
     }
@@ -497,6 +513,7 @@ fn find_opt_out(file: &SourceFile, id: &'static str, needle: &str, note: &str) -
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, line_no),
                 note: note.into(),
+                suggestion: None,
             });
         }
     }
@@ -609,6 +626,7 @@ fn sql_injection(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
                         verdict: Verdict::Fail,
                         evidence: format!("{}:{}", file.path, i + 1),
                         note: "SQL f-string built with interpolation passed to execute".into(),
+                        suggestion: Some(FIX_SQL),
                     });
                 }
                 if start + end >= lower.len() {

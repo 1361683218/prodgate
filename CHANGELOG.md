@@ -189,3 +189,13 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 代价（诚实记录）：收紧后的 SQL 规则只认同一行里 f-string 同时含 SQL 动词和插值。真实世界的 SQL 注入常跨行或拆成多段，会漏。宁可漏一些变体，也不能在每次扫描都误报。案例用 Griddy@d24419ce（AI agent 修的真实 SQL 注入 commit）做 anchored，样本压缩成规则能检测的单行形式，note 里说明。
 
 4 个 Rust 项目 + 3 个 Web 框架零误报。AI 代码 db 场景现在同时抓到连接串密码和 SQL 注入。mutation 10→11，案例 8→9，全套 59 测试、clippy 干净、自举 PASS。
+
+## 第 17 轮：修复建议（从"发现问题"到"告诉 AI 怎么改"）
+
+方向判断：继续加安全规则的边际收益在下降（每加一条都要经历多轮误报修复）。对"让 AI 写的代码达到安全"这个目标，比多一条规则更实用的是让每条 FAIL 带一句可直接照做的修复指令——不自动改代码，风险低。
+
+Finding 加 `suggestion: Option<&'static str>`，11 个构造点全部补齐。6 条信号型 FAIL 有具体建议（cors 换显式 origin、凭证改用环境变量并轮换、DB URI 密码移出连接串、SQL 改参数化查询、配置错误改 roots），声明型/UNCONFIRMED 为 None（需要人判断）。CLI 文本、JSON、MCP 三处输出都带上了，同一份文案保证一致。
+
+写测试时发现一个已有 bug：`PREFIX_PARTS` 里的 "AKIA" 是大写，但 `prefixed()` 接收的是小写值——AWS key 前缀从来没生效过。改成小写 `akia`。
+
+新增 tests/suggestions.rs 3 个测试（每条信号 FAIL 必须有建议、无信号不能有建议、JSON 必须序列化该字段）。62 测试全过，craft-libs 零误报，clippy 干净，自举 PASS。README 说明 `suggestion` 字段。

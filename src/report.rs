@@ -18,6 +18,10 @@ fn finding(f: &check::Finding) -> Json {
         ("verdict".into(), s(f.verdict.as_str())),
         ("evidence".into(), s(&f.evidence)),
         ("note".into(), s(&f.note)),
+        (
+            "suggestion".into(),
+            f.suggestion.map(s).unwrap_or(Json::Null),
+        ),
     ])
 }
 

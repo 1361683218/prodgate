@@ -270,6 +270,9 @@ fn call_gate(root: &Path) -> ToolResult {
         if f.verdict != check::Verdict::Pass && f.evidence != "-" {
             text.push_str(&format!("    at {}\n", f.evidence));
         }
+        if let Some(fix) = f.suggestion {
+            text.push_str(&format!("    fix: {}\n", fix));
+        }
     }
     let baselined = report
         .findings
