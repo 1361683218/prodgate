@@ -107,6 +107,13 @@ MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。�
 | `webhook.idempotency` | 显式关闭 webhook 幂等 | web |
 | `rls` | 显式关闭行级安全 | web |
 | `backup` | 显式关闭备份 | 全部 |
+| `eval.injection` | eval/exec 处理请求数据 | 全部 |
+| `unsafe.deserialization` | 反序列化不可信输入 | 全部 |
+| `weak.crypto` | 用 MD5/SHA1 存密码 | 全部 |
+| `jwt.algorithm` | JWT 校验接受 none 算法 | 全部 |
+| `path.traversal` | 用户输入拼进文件路径 | 全部 |
+| `shell.injection` | shell=True 拼插值命令 | 全部 |
+| `credential.logging` | 凭证写进日志 | 全部 |
 
 规则有两种写法，区别在它们看什么：
 

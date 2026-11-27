@@ -8,7 +8,7 @@ use prodgate::{mutation, report};
 fn all_shipped_mutations_are_detected_end_to_end() {
     let results = mutation::run_mutations();
     assert!(mutation::passed(&results));
-    assert_eq!(results.len(), 11);
+    assert_eq!(results.len(), 18);
     for r in &results {
         assert!(r.ok(), "mutation missed: {} ({})", r.name, r.note);
         assert_ne!(r.evidence, "-", "detected sample must carry evidence");

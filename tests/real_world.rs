@@ -280,3 +280,42 @@ fn parameterized_sql_is_not_flagged() {
         );
     }
 }
+
+#[test]
+fn ai_security_batch3_all_detected() {
+    let cases = [
+        ("eval.injection", "src/a.js", "const r = eval(req.body.expression);"),
+        ("unsafe.deserialization", "src/a.py", "pickle.loads(base64.b64decode(request.cookies.get('s')))"),
+        ("weak.crypto", "src/a.py", "hashlib.md5(password.encode()).hexdigest()"),
+        ("jwt.algorithm", "src/a.js", "jwt.verify(t, S, { algorithms: ['none'] });"),
+        ("path.traversal", "src/a.py", "name = request.args.get('name')\nreturn send_file(f\"/data/{name}\")"),
+        ("shell.injection", "src/a.py", "subprocess.call(f\"ping -c 1 {host}\", shell=True)"),
+        ("credential.logging", "src/a.py", "logger.info(f\"user={user} password={password}\")"),
+    ];
+    for (rule, path, src) in cases {
+        assert_eq!(
+            verdict_web(rule, path, src),
+            Verdict::Fail,
+            "AI security sample not detected by {}: {}",
+            rule, src
+        );
+    }
+}
+
+#[test]
+fn security_rules_do_not_flag_safe_code() {
+    let safe = [
+        ("eval.injection", "src/a.js", "const r = JSON.parse(req.body.value);"),
+        ("weak.crypto", "src/a.py", "return bcrypt.hashpw(password.encode(), bcrypt.gensalt())"),
+        ("jwt.algorithm", "src/a.js", "jwt.verify(t, S, { algorithms: ['HS256'] });"),
+        ("shell.injection", "src/a.py", "subprocess.run(['ping', '-c', '1', host], shell=False)"),
+        ("credential.logging", "src/a.py", "logger.info(f\"user={user_id} login\")"),
+    ];
+    for (rule, path, src) in safe {
+        assert_eq!(
+            verdict_web(rule, path, src),
+            Verdict::Pass,
+            "false positive on {}: {}", rule, src
+        );
+    }
+}

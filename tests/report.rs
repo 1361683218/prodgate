@@ -79,7 +79,7 @@ fn replay_and_cases_json_report_passed() {
     assert!(replay.get("results").and_then(|v| match v {
         Json::Arr(a) => Some(a.len()),
         _ => None,
-    }) == Some(8));
+    }) == Some(15));
 
     let cases = report::cases_json(root);
     assert!(passed(&cases));

@@ -1,0 +1,7 @@
+id = "jwt.algorithm/c001"
+rule = "jwt.algorithm"
+title = "JWT verification accepts none algorithm"
+source = "synthetic"
+source_url = ""
+contributor = "maintainer"
+note = "Synthetic: written naturally by an AI assistant in a security-focused scenario and captured in the prodgate AI-code benchmark. Not attributed to a specific upstream commit."

@@ -649,5 +649,12 @@ pub fn all_rules() -> Vec<Rule> {
         Rule { id: "webhook.idempotency", description: "Webhook idempotency not explicitly disabled", run: webhook_idempotency_off },
         Rule { id: "rls", description: "Row level security not explicitly disabled", run: rls_off },
         Rule { id: "backup", description: "Backup not explicitly disabled", run: backup_off },
+        Rule { id: "eval.injection", description: "No eval/exec on request data", run: crate::rules_security::eval_injection },
+        Rule { id: "unsafe.deserialization", description: "No unsafe deserialization of untrusted input", run: crate::rules_security::unsafe_deserialization },
+        Rule { id: "weak.crypto", description: "No fast hash for password storage", run: crate::rules_security::weak_crypto },
+        Rule { id: "jwt.algorithm", description: "JWT verification must not accept none", run: crate::rules_security::jwt_algorithm },
+        Rule { id: "path.traversal", description: "No user-controlled value in filesystem path", run: crate::rules_security::path_traversal },
+        Rule { id: "shell.injection", description: "No shell=True with interpolated command", run: crate::rules_security::shell_injection },
+        Rule { id: "credential.logging", description: "No credentials written to logs", run: crate::rules_security::credential_logging },
     ]
 }

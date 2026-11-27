@@ -1,0 +1,1 @@
+pickle.loads(base64.b64decode(request.cookies.get('session')))

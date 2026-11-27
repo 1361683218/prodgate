@@ -219,3 +219,13 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 路径分离：prompt 内容来自 prodgate 自带案例库（CARGO_MANIFEST_DIR），surface 来自目标项目（CLI 的 root / MCP 的可选 root）。MCP tool schema 加了可选 root 参数。CLI 文本、JSON applicable 字段、MCP 三通道一致。
 
 新增 4 测试（cli/web 差异、JSON applicable、与 gate 判定一致）。69 测试全过，自举 PASS。
+
+## 第 20 轮：批量加 7 条 AI 安全规则（按用户要求增加代码量）
+
+第三批 AI 实测的 7 个安全场景（eval 注入、不安全反序列化、弱密码哈希、JWT none、路径遍历、shell 注入、凭证日志）现行规则 0 检出。一次性加 7 条信号型规则，新文件 src/rules_security.rs 承载。
+
+误报处理：真实项目连出 4 个误报（Rust 的 eval 函数、app_fingerprint 里的 print 子串、MS-OFFCRYPTO 格式要求的 md5、普通方法调用）。结构性修复：标识符边界匹配 has_call()、按 Language 限定 eval 只对 JS/TS、NOSONAR/格式标记抑制、bare md5 调用不算密码哈希。近邻污名 nearby_taint() 补上 deser/path 的跨行漏检。最终 4 个真实项目零误报，7 个 AI 场景全检出。
+
+7 组 fixture + 7 个 synthetic 案例（AI 实测样本，诚实标注不冒充 commit）+ 7 个 mutation 样本。案例库 16 个：9 source-backed + 7 synthetic。放宽 cases 测试——synthetic 是一等公民，但必须 source=synthetic 且无 URL。
+
+自举悖论：规则的 FIX 常量字符串含危险模式，被自己的规则扫到；mutation.rs 的注入样本同理。skip_path 加 mutation/rules_security。mutation 11→18，replay 8→15。71 测试全过，clippy 待验，自举 PASS。

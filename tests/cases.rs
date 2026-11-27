@@ -32,17 +32,22 @@ fn upstream_cases_have_citable_sources() {
 }
 
 #[test]
-fn every_shipped_case_has_a_verifiable_source() {
-    // All 7 rules now have a citable source — none is left as bare synthetic.
+fn every_case_is_either_citable_or_honestly_synthetic() {
+    // Core rules have verifiable sources; AI-benchmark rules are synthetic
+    // but must never masquerade as upstream. Both states are first-class.
     let results = cases::validate(root());
-    assert!(results.len() >= 7);
+    assert!(results.len() >= 16);
+    let citable = results.iter().filter(|r| r.provenance.is_citable()).count();
+    assert!(citable >= 9, "at least the original rules must stay source-backed");
     for r in &results {
-        assert!(
-            r.provenance.is_citable(),
-            "case {} is not source-backed",
-            r.meta.id
-        );
-        assert!(r.meta.source_url.starts_with("https://github.com/"));
+        if r.provenance.is_citable() {
+            assert!(r.meta.source_url.starts_with("https://github.com/"));
+        } else if r.provenance == Provenance::Synthetic {
+            assert_eq!(r.meta.source, "synthetic");
+            assert!(r.meta.source_url.is_empty());
+        } else {
+            panic!("case {} has neither a citable source nor a synthetic marker", r.meta.id);
+        }
     }
 }
 
@@ -113,5 +118,5 @@ fn anchored_cases_are_citable_but_not_upstream() {
         .filter(|r| r.provenance == prodgate::cases::Provenance::Upstream)
         .collect();
     assert!(upstream.len() >= 3, "cors, rls and secrets should be upstream");
-    assert_eq!(prodgate::cases::trusted_count(&results), results.len());
+    assert_eq!(prodgate::cases::trusted_count(&results), results.iter().filter(|r| r.provenance.is_citable() && r.valid()).count());
 }
