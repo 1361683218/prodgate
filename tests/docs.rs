@@ -85,12 +85,26 @@ fn ai_code_doc_has_current_state_banner() {
 fn delivery_summary_numbers_match_reality() {
     // The one-page delivery doc must not drift from the code it summarizes.
     let doc = read("DELIVERY.md");
-    // Test count is written as a number; the guard checks it stays plausible.
-    // Exact count is intentionally not asserted (adding a test must not break docs).
-    assert!(doc.contains("个测试"), "DELIVERY must state the test count");
+    // Current-state docs must NOT hardcode a test count — it drifts with
+    // every added test. Point at the test suite instead.
+    assert!(!doc.contains("个测试"),
+        "DELIVERY must not hardcode a drifting test count");
     assert!(doc.contains("15 条规则"));
     assert!(doc.contains("18/18"));
     assert!(doc.contains("16/16"));
     assert!(doc.contains("3492"), "real-project scan figure must be present");
     // No hardcoded line counts: those change every time a test is added.
+}
+
+#[test]
+fn benchmark_reproduce_commands_have_no_drifting_counts() {
+    // BENCHMARK's "how to reproduce" block is current-state documentation.
+    // Historical counts elsewhere in the file are timeline records and stay.
+    let bench = read("BENCHMARK.md");
+    let pos = bench.find("## 怎么复现").expect("BENCHMARK must have a reproduce section");
+    let rest = &bench[pos..];
+    let end = rest.find("\n## ").unwrap_or(rest.len());
+    let section = &rest[..end];
+    assert!(!section.contains("个测试"), "reproduce commands must not hardcode test counts");
+    assert!(!section.contains("条规则"), "reproduce commands must not hardcode rule counts");
 }

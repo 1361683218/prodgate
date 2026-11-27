@@ -74,7 +74,7 @@ recursive=true
 
 ```bash
 cargo build --offline
-cargo test --offline                    # 37 个测试，含 10 个真实世界回归
+cargo test --offline                    # 全套测试，含真实世界回归
 cargo run --offline -- gate --json <项目路径>
 ```
 

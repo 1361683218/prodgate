@@ -68,4 +68,4 @@ recursive=true     # Cargo workspace 等分散源码
 
 ## 项目现状
 
-纯 Rust 实现（src + tests），离线可构建（无外部 crate 依赖），101 个测试，clippy 干净。目前是一个**自洽、有测试守着、能用的工具**——不是一个正在扩张的项目。
+纯 Rust 实现（src + tests），离线可构建（无外部 crate 依赖），全套测试与 clippy 在 CI 强制。目前是一个**自洽、有测试守着、能用的工具**——不是一个正在扩张的项目。
