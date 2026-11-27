@@ -295,3 +295,11 @@ CLI prodgate efficacy（文本+JSON）+ MCP prodgate_efficacy tool。新增 test
 把 cases、regression 纳入 `all`（文本版和 all_json），efficacy 作为信息性报告展示但不阻塞（实验指标不该让构建变红）。文本版所有关卡都执行完再汇总，不让一个失败掩盖其他状态。CI workflow 从两步门禁简化成一步 `all`。
 
 加测试断言 all_json 必须聚合全部六项，且五个 gating 守卫的 passed 都为 true——以后加哨兵忘接进 all，测试立刻挂。96 测试全过，自举 PASS。
+
+## 第 29 轮：修 symlink 循环与重复扫描
+
+运行时故障模式：walk_dir 用 path.is_dir() 判断目录，会跟随符号链接。实测一个指向祖先的 symlink 让 2 个真实文件被扫成 64 个——重复扫描浪费时间、产生重复 finding、深层文件系统上可能栈溢出。
+
+修法：symlink_metadata（不跟随链接）识别符号链接并跳过；visited 集合用 canonicalize 后的路径防别名重复。实测回到 2 个文件，正常深层递归仍工作。
+
+新增 tests/symlink.rs 4 测试：指向祖先的链接、指向文件的链接、正常深递归、含空格路径。100 测试全过。

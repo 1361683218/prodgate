@@ -4,7 +4,7 @@ use crate::adapter::{Language, SourceFile};
 use crate::check::{all_rules, Finding, RuleCtx, Verdict};
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const BASELINE_FILE: &str = ".prodgate/baseline.txt";
 
@@ -200,16 +200,36 @@ fn push_if_source(root: &Path, path: &Path, out: &mut Vec<SourceFile>) {
     }
 }
 
-fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<SourceFile>) {
+fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<SourceFile>, visited: &mut std::collections::HashSet<PathBuf>) {
+    // Canonicalize so symlinks and `..` aliases resolve to one identity.
+    // Without this, a symlink pointing at an ancestor makes the walk recurse
+    // until the OS path limit — scanning the same files dozens of times and
+    // risking stack overflow on deeper filesystems.
+    let canonical = match fs::canonicalize(dir) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    if !visited.insert(canonical) {
+        return;
+    }
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        // symlink_metadata does NOT follow links. A link to a directory must
+        // not be walked: it is an alias, not a distinct tree.
+        let meta = match fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() {
             let name = entry.file_name().to_string_lossy().to_string();
             if SKIP_DIRS.contains(&name.as_str()) || name.starts_with('.') {
                 continue;
             }
-            walk_dir(root, &path, out);
+            walk_dir(root, &path, out, visited);
         } else {
             push_if_source(root, &path, out);
         }
@@ -222,7 +242,8 @@ fn collect_sources(root: &Path, cfg: &Config) -> Vec<SourceFile> {
         let dir = root.join(r);
         if cfg.recursive {
             if dir.is_dir() {
-                walk_dir(root, &dir, &mut out);
+                let mut visited = std::collections::HashSet::new();
+                walk_dir(root, &dir, &mut out, &mut visited);
             }
         } else {
             let Ok(entries) = fs::read_dir(&dir) else { continue };
