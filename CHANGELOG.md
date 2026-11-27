@@ -229,3 +229,13 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 7 组 fixture + 7 个 synthetic 案例（AI 实测样本，诚实标注不冒充 commit）+ 7 个 mutation 样本。案例库 16 个：9 source-backed + 7 synthetic。放宽 cases 测试——synthetic 是一等公民，但必须 source=synthetic 且无 URL。
 
 自举悖论：规则的 FIX 常量字符串含危险模式，被自己的规则扫到；mutation.rs 的注入样本同理。skip_path 加 mutation/rules_security。mutation 11→18，replay 8→15。71 测试全过，clippy 待验，自举 PASS。
+
+## 第 21 轮：文档一致性 + 更大规模验证
+
+第 20 轮批量加 7 条规则后，文档严重漂移：README 还写"7 条规则、8 个案例、信号型三条"，AI-CODE.md 的边界结论停留在 8 条规则时代。这轮把"当前状态"描述全部更新到 15 条规则 / 16 案例 / 10 条信号型，AI-CODE.md 的历史叙述保留但加了"当前状态"置顶说明（历史是历史，不能篡改）。
+
+扩大验证到全部 7 个真实项目（4 Rust + express/flask/gin），15 条规则全量扫描零误报。prompt 自动包含全部 15 条规则（因为它从 all_rules() 动态生成）。
+
+结构性修复：新增 tests/docs.rs，从 README/BENCHMARK/AI-CODE 提取规则数与案例数，和 all_rules()/案例库实际数量对比。以后加规则不同步更新文档，测试直接挂——不再靠人记。文档里的数字改成阿拉伯数字以便机器读取。
+
+76 测试全过，自举 PASS。

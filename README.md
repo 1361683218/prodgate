@@ -117,7 +117,7 @@ MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。�
 
 规则有两种写法，区别在它们看什么：
 
-**信号型**有三条，`cors.wildcard`、`secrets.hardcoded` 和 `sql.injection`。它们扫全部代码行。字符串里的 `*` 真的会被当成 header 值用，所以不能跳过。
+**信号型**有 10 条：`cors.wildcard`、`secrets.hardcoded`、`sql.injection`，以及 7 条 AI 高频安全规则（`eval.injection`、`unsafe.deserialization`、`weak.crypto`、`jwt.algorithm`、`path.traversal`、`shell.injection`、`credential.logging`）。它们扫全部代码行，发现危险写法就报 FAIL 并给出修复建议。
 
 另外五条是**声明型**，只在注释里找 `prodgate: <key>=off`。这里有个取舍：静态扫描没法判断一个服务在运行时到底有没有限流，所以 prodgate 不去猜，只认人明确写下的关闭声明。代码字符串里的 `rls=off` 不算，那不是决定。
 
@@ -151,11 +151,12 @@ MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。�
 }
 ```
 
-五个工具，都是只读的：
+六个工具，都是只读的：
 
 | 工具 | 什么时候用 | 返回什么 |
 |---|---|---|
-| `prodgate_rules` | 写代码之前 | 列出 7 条规则，让 AI 提前知道要加哪些防护 |
+| `prodgate_rules` | 写代码之前 | 列出 15 条规则，让 AI 提前知道要加哪些防护 |
+| `prodgate_prompt` | 开始写代码之前 | 完整的编码规范：每条规则带真实好坏样本和修复指令，按 surface 裁剪 |
 | `prodgate_gate` | 写完代码之后 | 每条规则的 PASS / FAIL / NOT-ASSESSED，带行号 |
 | `prodgate_replay` | 改过规则之后 | 检查规则还能不能区分好坏样本 |
 | `prodgate_mutate` | 改过规则之后 | 把真实坏样本注入临时项目，验证端到端能检出 |
@@ -180,7 +181,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 这不是形式主义。做第 5 轮时，我从 `expressjs/cors` 和 `supabase/supabase` 的真实 PR 里各取了一个案例，结果暴露出两个自己写的玩具样本从没覆盖的问题：真实代码把 CORS 的 key 和 wildcard 写在两行，原来的规则要求同一行；修复后的代码里 `options.origin === '*'` 是比较而不是赋值，规则误报了。两个都改掉了。
 
-案例库覆盖全部 7 条规则，共 8 个案例，全部可核验：4 个 upstream（真 commit + 真代码）、4 个 anchored（真 commit 证明风险，代码文本按 prodgate 语法合成）。贡献格式见 `CASES.md`。
+案例库覆盖全部 15 条规则，共 16 个案例：9 个可溯源（4 upstream + 5 anchored，真 commit 支撑）和 7 个 synthetic（来自 AI 实测样本，明确标注不冒充真实 commit）。全部 0 invalid。贡献格式见 `CASES.md`。
 
 ## 端到端验证（mutate）
 
@@ -218,7 +219,7 @@ mutation: 10/10 detected — PASS
 
 它也不判断某行代码是不是 AI 写的。那种分类器在规范统一、用了 formatter 的仓库里误判率很高，不值得做。
 
-现在仍然是小工具。7 条规则覆盖的是最常见、最容易漏的几项，不是完整的安全审计。
+现在 15 条规则：10 条信号型（扫真实危险写法）+ 5 条声明型（记录团队取舍）。覆盖 AI 最容易漏的常见风险，但**不是完整的安全审计**——XSS、CSRF、SSRF、命令注入的其他变体、依赖漏洞都没有。信号型规则为了压误报刻意收窄，会漏掉一些变体。
 
 ## 参与开发
 

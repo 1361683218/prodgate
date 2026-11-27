@@ -80,7 +80,9 @@ cargo test                          # 案例库是测试门禁的一部分
 
 ## 当前案例
 
-8 条规则全部有案例，共 9 个，全部可核验：4 个 upstream、5 个 anchored。
+15 条规则全部有案例，共 16 个：9 个可溯源（4 upstream、5 anchored）+ 7 个 synthetic。全部 0 invalid。
+
+`synthetic` 是一等公民：来自 AI 实测样本，明确标注来源类型，不冒充真实 commit。它必须 `source = "synthetic"` 且 `source_url = ""`。可溯源案例必须有 GitHub URL。
 
 | 案例 | provenance | 真实依据 |
 |---|---|---|

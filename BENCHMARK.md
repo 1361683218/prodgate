@@ -64,9 +64,9 @@ recursive=true
 
 **声明型规则在真实项目上基本不触发。** 5 条声明型规则找的是 `prodgate: key=off` 这样的显式关闭标记，真实项目不会写这种标记。所以它们报 PASS 主要是因为"没看见信号"，不是因为"确认防护到位"。
 
-这不是 bug，是设计取舍：静态扫描推断不了运行时行为，prodgate 不假装能推断。但这意味着一个只靠声明型规则的项目，实际检出能力很弱。目前真正有检出力的是两条信号型规则（cors.wildcard、secrets.hardcoded）加上递归配置。
+这不是 bug，是设计取舍：静态扫描推断不了运行时行为，prodgate 不假装能推断。但这意味着一个只靠声明型规则的项目，实际检出能力很弱。目前真正有检出力的是十条信号型规则：cors.wildcard、secrets.hardcoded、sql.injection，加上 7 条 AI 高频安全规则（eval.injection、unsafe.deserialization、weak.crypto、jwt.algorithm、path.traversal、shell.injection、credential.logging）。这十条扫真实代码里的危险写法，在 7 个真实项目（4 个 Rust + express/flask/gin）上零误报。
 
-**secrets 规则刻意牺牲了召回率。** 为了压掉误报，现在要求值紧凑且含字母数字混合（或带已知前缀）。一些真实但不合这个形状的凭证会漏掉。补召回应该靠案例库积累真实样本，而不是继续放宽规则——那会重新引入误报。
+**信号型规则刻意牺牲了召回率。** 为了压掉误报，规则收得很窄——secrets 要求值紧凑且含字母数字混合（或带已知前缀），eval 只适用于 JS/TS。一些真实但不合这个形状的凭证会漏掉。补召回应该靠案例库积累真实样本，而不是继续放宽规则——那会重新引入误报。
 
 **基准规模还小。** 四个项目都是 Rust，且都是同一个作者/生态。下一步应该扫不同语言、不同形态（尤其 surface=web）的项目，验证那 4 条 Web 规则。
 
