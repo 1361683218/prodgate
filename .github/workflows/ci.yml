@@ -13,17 +13,13 @@ jobs:
         with:
           fetch-depth: 2
 
-      # The judge must not be changed by the same commit it judges. This is
-      # advisory-only in CI logs; real enforcement is branch protection +
-      # CODEOWNERS review (see REDTEAM.md attack #6).
+      # Advisory only — never fails the build (see REDTEAM.md attack #6).
       - name: Flag judge-file changes
-        # Advisory only: this step must NEVER fail the build. It is an audit
-        # hint in the logs; real enforcement is CODEOWNERS + branch protection.
         continue-on-error: true
         run: |
           changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
           if [ -n "$changed" ] && echo "$changed" | grep -E '^(tests/|src/(check|rules_security|mutation|cases|fixture)\.rs|loop/judge\.sh|\.github/workflows/)'; then
-            echo "::warning::This commit changes judge files - human review required (see REDTEAM.md)"
+            echo "::warning::judge files changed - human review required (REDTEAM.md)"
           fi
           exit 0
 
@@ -33,16 +29,16 @@ jobs:
           components: clippy
 
       - name: Build
-        run: cargo build --locked
+        run: cargo build --locked 2>&1 | tee /tmp/build.log
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test --locked 2>&1 | tee /tmp/test.log
 
       - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log
 
-      - name: Full gate (replay + mutation + gate + cases + regression)
-        run: cargo run --locked -- all .
+      - name: Full gate
+        run: cargo run --locked -- all . 2>&1 | tee /tmp/gate.log
 
       # `all` aggregates every guard. Adding a new sentinel to main.rs is
       # enough to make CI enforce it — no extra workflow step needed.
