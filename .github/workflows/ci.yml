@@ -29,16 +29,24 @@ jobs:
           components: clippy
 
       - name: Build
-        run: cargo build --locked 2>&1 | tee /tmp/build.log
+        run: |
+          set -o pipefail
+          cargo build --locked 2>&1 | tee /tmp/build.log
 
       - name: Test
-        run: cargo test --locked 2>&1 | tee /tmp/test.log
+        run: |
+          set -o pipefail
+          cargo test --locked 2>&1 | tee /tmp/test.log
 
       - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log
+        run: |
+          set -o pipefail
+          cargo clippy --locked --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log
 
       - name: Full gate
-        run: cargo run --locked -- all . 2>&1 | tee /tmp/gate.log
+        run: |
+          set -o pipefail
+          cargo run --locked -- all . 2>&1 | tee /tmp/gate.log
 
       # `all` aggregates every guard. Adding a new sentinel to main.rs is
       # enough to make CI enforce it — no extra workflow step needed.
