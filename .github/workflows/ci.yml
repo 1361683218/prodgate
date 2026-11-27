@@ -71,8 +71,8 @@ jobs:
           code=$?
           cat /tmp/gate.log
           if [ $code -ne 0 ]; then
-            echo "::error::Full gate failed (exit $code):"
-            tail -20 /tmp/gate.log | sed 's/^/  /'
+            echo "::error::Full gate failed (exit $code) log lines: $(wc -l < /tmp/gate.log 2>/dev/null || echo NA)"
+            echo "::error::gate log first bytes: $(head -c 500 /tmp/gate.log 2>/dev/null || echo NA)"
             exit $code
           fi
 
