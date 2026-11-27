@@ -80,6 +80,19 @@ surface=web
 
 Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recursive=true` 递归扫描。扫描到 0 个源码文件会报 FAIL（规则是 `config.no-sources`），不会给你一个假的 PASS。这个判定不能被 baseline 冻结。
 
+## 事前预防：给 AI 的编码规范
+
+`gate` 是事后检查。要让 AI 在写代码时就别犯错，先加载规范：
+
+```bash
+./target/debug/prodgate prompt        # 完整编码指南（Markdown）
+./target/debug/prodgate prompt --json # 结构化版本，供工具消费
+```
+
+输出从**规则库 + 通过验证的案例库**生成，每条规则带真实 commit 里的坏写法、好写法、修复指令和来源。规则和案例库变了，提示词自动跟着变——不会出现"文档说一套、gate 查另一套"。
+
+MCP 里对应 `prodgate_prompt` tool。推荐的工作流：AI 开始写代码前调用它，写完调用 `prodgate_gate` 验证。
+
 ## 它检查什么
 
 | 规则 | 检测什么 | 适用 |

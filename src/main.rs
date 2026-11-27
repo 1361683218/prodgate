@@ -17,6 +17,7 @@ fn help() {
     println!("  mutate     Inject known-bad samples into real project layouts");
     println!("  baseline   Record current FAILs as known issues");
     println!("  all        Replay + mutate + gate (self-bootstrap check, the default)");
+    println!("  prompt     Emit AI coding rules with real good/bad examples (feed-forward)");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -170,7 +171,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all"];
+    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -237,6 +238,17 @@ fn main() {
                     }
                 }
             }
+            "prompt" => {
+                use prodgate::json::Json;
+                let sections = prodgate::prompt::sections(root);
+                let doc = Json::Obj(vec![
+                    ("tool".into(), Json::Str("prodgate".into())),
+                    ("command".into(), Json::Str("prompt".into())),
+                    ("passed".into(), Json::Bool(true)),
+                    ("rules".into(), Json::Arr(sections)),
+                ]);
+                emit_json(doc)
+            }
             _ => unreachable!(),
         }
     } else {
@@ -246,6 +258,10 @@ fn main() {
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
             "mutate" => print_mutation(),
+            "prompt" => {
+                print!("{}", prodgate::prompt::render(root));
+                true
+            }
             "all" => {
                 let a = print_replay(root);
                 println!();

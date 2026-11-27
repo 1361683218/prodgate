@@ -199,3 +199,13 @@ Finding 加 `suggestion: Option<&'static str>`，11 个构造点全部补齐。6
 写测试时发现一个已有 bug：`PREFIX_PARTS` 里的 "AKIA" 是大写，但 `prefixed()` 接收的是小写值——AWS key 前缀从来没生效过。改成小写 `akia`。
 
 新增 tests/suggestions.rs 3 个测试（每条信号 FAIL 必须有建议、无信号不能有建议、JSON 必须序列化该字段）。62 测试全过，craft-libs 零误报，clippy 干净，自举 PASS。README 说明 `suggestion` 字段。
+
+## 第 18 轮：事前预防——给 AI 的编码规范
+
+前 17 轮都是事后检测。对"让 AI 写出的代码达到安全"这个目标，写代码时就不犯错比写完再改更有效。新增 `prompt` 命令和 MCP `prodgate_prompt` tool：从规则库 + 通过验证的案例库生成一份 AI 可直接遵守的编码规范，每条规则带真实 commit 的 bad/good 代码、修复指令、来源。
+
+设计要点：内容从 `all_rules()` 和 `cases::validate()` 动态生成，不手写第二份文档——规则和案例库变了 prompt 自动跟着变，不会漂移。声明型规则额外说明"主动加上控制，不要静默省略；有意关闭要显式写 prodgate: key=off"。
+
+prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证和 gate 输出同一份文案。CLI 文本 + JSON 结构化 + MCP 三通道。
+
+新增 tests/prompt.rs 3 测试。65 测试全过，clippy 待验，自举 PASS。

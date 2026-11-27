@@ -16,4 +16,5 @@ pub mod gate;
 pub mod json;
 pub mod mcp;
 pub mod mutation;
+pub mod prompt;
 pub mod report;

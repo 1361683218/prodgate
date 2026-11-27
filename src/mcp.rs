@@ -135,6 +135,13 @@ fn tools_list() -> Json {
                 schema(vec![], &[]),
             ),
             tool(
+                "prodgate_prompt",
+                "Get the full AI coding guide: every rule with a real bad/good code example \
+                 from the case library and an actionable fix. Call this BEFORE writing code \
+                 so you avoid the mistakes instead of fixing them afterward.",
+                schema(vec![], &[]),
+            ),
+            tool(
                 "prodgate_gate",
                 "Scan a project root against the production-readiness rules. \
                  Returns PASS/FAIL/NOT-ASSESSED for every rule with evidence. \
@@ -199,6 +206,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
 
     let result = match name {
         "prodgate_rules" => call_rules(),
+        "prodgate_prompt" => call_prompt(),
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
         "prodgate_cases" => with_root(args, call_cases),
@@ -255,6 +263,13 @@ fn call_rules() -> ToolResult {
          opt-outs in comments — a string literal is not a declaration.",
     );
     ToolResult::ok(text)
+}
+
+fn call_prompt() -> ToolResult {
+    // The prompt is generated from prodgate's own case library, which ships
+    // with the binary. It does not depend on the project being scanned.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    ToolResult::ok(crate::prompt::render(root))
 }
 
 fn call_gate(root: &Path) -> ToolResult {
