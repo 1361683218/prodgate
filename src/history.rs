@@ -17,8 +17,13 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const HISTORY_FILE: &str = ".prodgate/history.jsonl";
-/// Keep history bounded so a long-running CI does not grow it forever.
+/// Cap by count AND age. Count alone has no time dimension: a daily scan
+/// keeps 500 days, a CI scan every second keeps eight minutes. Both are
+/// wrong for a trend view. Age-based trimming was the fix large projects
+/// apply to caches (craft-libs' scheduled full runs keep caches from going
+/// stale) — applied here to history records.
 const MAX_SNAPSHOTS: usize = 500;
+const MAX_AGE_SECS: u64 = 30 * 24 * 60 * 60;
 
 fn history_path(root: &Path) -> PathBuf {
     root.join(HISTORY_FILE)
@@ -61,21 +66,31 @@ pub fn record(root: &Path, report: &GateReport) -> std::io::Result<usize> {
     let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
     writeln!(file, "{}", line)?;
 
-    // Trim oldest lines if over cap. Read + rewrite is rare (only past 500).
+    // Trim by BOTH count and age. Read + rewrite is rare (past the cap or
+    // after a long gap). Parsed snapshots let us drop stale ones; malformed
+    // lines are dropped too — a corrupt line must not pin the file forever.
     let text = fs::read_to_string(&path)?;
-    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-    if lines.len() > MAX_SNAPSHOTS {
-        let keep = &lines[lines.len() - MAX_SNAPSHOTS..];
-        let mut trimmed = String::new();
-        for l in keep {
-            trimmed.push_str(l);
-            trimmed.push('\n');
-        }
-        fs::write(&path, trimmed)?;
-        Ok(MAX_SNAPSHOTS)
-    } else {
-        Ok(lines.len())
+    let mut kept: Vec<String> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            let v = crate::json::parse(l).ok()?;
+            let ts = match v.get("ts") { Some(Json::Num(n)) => *n as u64, _ => return None };
+            if snap.ts.saturating_sub(ts) > MAX_AGE_SECS { None } else { Some(l.to_string()) }
+        })
+        .collect();
+    // Always keep the newest record, even if every record is older than the
+    // window — history must never become empty just because time passed.
+    if kept.is_empty() {
+        kept.push(line);
     }
+    if kept.len() > MAX_SNAPSHOTS {
+        let drain = kept.len() - MAX_SNAPSHOTS;
+        kept.drain(..drain);
+    }
+    let trimmed = kept.join("\n") + "\n";
+    fs::write(&path, trimmed)?;
+    Ok(kept.len())
 }
 
 fn snapshot_json(s: &Snapshot) -> Json {

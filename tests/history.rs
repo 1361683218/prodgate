@@ -71,3 +71,45 @@ fn missing_history_is_empty() {
     assert!(history::load(&dir).is_empty());
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn old_snapshots_are_trimmed_by_age() {
+    // Count alone has no time dimension: a 40-day-old snapshot must go even
+    // when there are only three records. Age cap is 30 days.
+    let dir = project();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let old = now - 40 * 24 * 60 * 60;
+    let recent = now - 2 * 24 * 60 * 60;
+    use std::io::Write;
+    fs::create_dir_all(dir.join(".prodgate")).unwrap();
+    {
+        let mut f = fs::OpenOptions::new().create(true).append(true)
+            .open(dir.join(".prodgate/history.jsonl")).unwrap();
+        for ts in [old, old, recent] {
+            writeln!(f, "{{\"ts\":{},\"files\":1,\"fail\":0,\"pass\":1,\"baseline\":0,\"unconfirmed\":0,\"na\":0,\"passed\":true}}", ts).unwrap();
+        }
+    }
+    // Appending one fresh record triggers trimming.
+    history::record(&dir, &gate::run_gate(&dir)).unwrap();
+    let snaps = history::load(&dir);
+    assert_eq!(snaps.len(), 2, "two old snapshots must be dropped, recent + fresh kept");
+    assert!(snaps.iter().all(|s| s.ts >= recent), "no stale snapshot should survive");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn all_stale_history_keeps_newest_record() {
+    // History must never become empty just because every record aged out.
+    let dir = project();
+    let old = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() - 90 * 24 * 60 * 60;
+    fs::create_dir_all(dir.join(".prodgate")).unwrap();
+    fs::write(
+        dir.join(".prodgate/history.jsonl"),
+        format!("{{\"ts\":{},\"files\":1,\"fail\":0,\"pass\":1,\"baseline\":0,\"unconfirmed\":0,\"na\":0,\"passed\":true}}\n", old),
+    ).unwrap();
+    history::record(&dir, &gate::run_gate(&dir)).unwrap();
+    assert!(!history::load(&dir).is_empty(), "newest record must survive age trimming");
+    fs::remove_dir_all(&dir).ok();
+}

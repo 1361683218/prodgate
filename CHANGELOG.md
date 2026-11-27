@@ -345,3 +345,11 @@ CLI 加 report 命令（--out FILE / --out=FILE），零外部依赖的有参命
 反直觉发现：GitHub 原生 on.push.paths 被五个成熟项目集体回避——merge queue 下必需检查会悬空，改用 job 级 if: skipped + conclusion 聚合。缓存属于"跑得快"不属于"少跑"，rust-analyzer/cargo/ripgrep 刻意不缓存；craft-anything 记录 incremental 目录曾达 46GB——增量的阴暗面是磁盘膨胀。
 
 报告写入 INCREMENTAL-RESEARCH.md，带具体配置证据与 URL 来源，被截断未复查的部分明确标注。去掉易漂移的行数字。
+
+## 第 34 轮：history 时间窗口裁剪（调研落地）
+
+用户确认"改 prodgate 本身"。先实测六道关卡耗时：最慢 replay 0.33s，全流程 <0.5s——范式 B 拓扑闸门是伪需求（tokio 的 basics 是为省 miri/asan 等 30 个昂贵 job，prodgate 没有昂贵关卡）。范式 A 增量扫描报告里已论证不做。C/D 已落地。所以只做调研唯一真正适用的发现：
+
+history 原先只有 500 条上限，没有时间维度——每天扫一次留 500 天，每秒扫一次留 8 分钟，趋势图时间尺度不可控。借鉴 craft-libs 定时全量保缓存不过期 + ledger 内容生命周期，加 30 天时间窗口 + 条数双裁剪；过期记录自动丢，最新一条永远保留，损坏行不 pin 文件。不加配置项（避免配置蔓延，与条数上限一样是内部防膨胀策略）。
+
+新增 2 测试（旧快照裁剪、全过期仍保留最新）。112 测试全过。调研报告更新适用性判断表，把"哪些范式不适用及数据依据"写清楚。
