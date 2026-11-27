@@ -209,3 +209,13 @@ Finding 加 `suggestion: Option<&'static str>`，11 个构造点全部补齐。6
 prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证和 gate 输出同一份文案。CLI 文本 + JSON 结构化 + MCP 三通道。
 
 新增 tests/prompt.rs 3 测试。65 测试全过，clippy 待验，自举 PASS。
+
+## 第 19 轮：prompt 按项目形态裁剪
+
+第 18 轮的 prompt 是通用规范——CLI 项目也收到 CORS/webhook/RLS 的完整代码示例，浪费 AI 注意力。这轮按 `prodgate.conf` 的 surface 裁剪：不适用规则压成一行 NOT APPLICABLE，适用的保留完整 bad/good/修复。
+
+关键设计：把 gate 里硬编码的 rule→surface 判定抽成公开函数 `applies_to_surface()`，gate 和 prompt 共用。测试断言两者一致——被 gate 标 NOT-ASSESSED 的规则绝不会在 prompt 里被当成可执行建议。避免两处判定漂移。
+
+路径分离：prompt 内容来自 prodgate 自带案例库（CARGO_MANIFEST_DIR），surface 来自目标项目（CLI 的 root / MCP 的可选 root）。MCP tool schema 加了可选 root 参数。CLI 文本、JSON applicable 字段、MCP 三通道一致。
+
+新增 4 测试（cli/web 差异、JSON applicable、与 gate 判定一致）。69 测试全过，自举 PASS。

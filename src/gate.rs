@@ -70,6 +70,16 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
     Ok(issues.len())
 }
 
+/// Can this rule be evaluated on the declared surface? Shared by gate and
+/// prompt generation: a rule reported NOT-ASSESSED by the gate must not be
+/// presented as actionable guidance to the AI writing the code.
+pub fn applies_to_surface(rule_id: &str, surface: &str) -> bool {
+    match rule_id {
+        "cors.wildcard" | "rate.limit" | "webhook.idempotency" | "rls" => surface == "web",
+        _ => true,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub roots: Vec<String>,
@@ -219,13 +229,9 @@ fn run_gate_raw(root: &Path) -> GateReport {
 
     for rule in all_rules() {
         // A rule that cannot be evaluated on this surface is NOT-ASSESSED,
-        // never silently skipped.
-        let applicable = match rule.id {
-            "cors.wildcard" | "rate.limit" | "webhook.idempotency" | "rls" => {
-                cfg.surface == "web"
-            }
-            _ => true,
-        };
+        // never silently skipped. Shared with prompt generation so both
+        // agree on which controls matter for this project.
+        let applicable = applies_to_surface(rule.id, &cfg.surface);
         if !applicable {
             findings.push(Finding {
                 id: rule.id,

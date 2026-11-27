@@ -139,7 +139,7 @@ fn tools_list() -> Json {
                 "Get the full AI coding guide: every rule with a real bad/good code example \
                  from the case library and an actionable fix. Call this BEFORE writing code \
                  so you avoid the mistakes instead of fixing them afterward.",
-                schema(vec![], &[]),
+                schema(vec![("root", root_property())], &[]),
             ),
             tool(
                 "prodgate_gate",
@@ -206,7 +206,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
 
     let result = match name {
         "prodgate_rules" => call_rules(),
-        "prodgate_prompt" => call_prompt(),
+        "prodgate_prompt" => call_prompt(args),
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
         "prodgate_cases" => with_root(args, call_cases),
@@ -265,11 +265,17 @@ fn call_rules() -> ToolResult {
     ToolResult::ok(text)
 }
 
-fn call_prompt() -> ToolResult {
-    // The prompt is generated from prodgate's own case library, which ships
-    // with the binary. It does not depend on the project being scanned.
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    ToolResult::ok(crate::prompt::render(root))
+fn call_prompt(args: Option<&Json>) -> ToolResult {
+    // Content comes from prodgate's shipped case library; the surface filter
+    // comes from the project being worked on (optional `root` argument).
+    let cases_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let surface = args
+        .and_then(|a| a.get("root"))
+        .and_then(Json::as_str)
+        .filter(|r| !r.trim().is_empty())
+        .map(|r| gate::load_config(Path::new(r)).surface)
+        .unwrap_or_else(|| "cli".to_string());
+    ToolResult::ok(crate::prompt::render(cases_root, &surface))
 }
 
 fn call_gate(root: &Path) -> ToolResult {

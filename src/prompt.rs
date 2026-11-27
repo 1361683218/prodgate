@@ -94,7 +94,7 @@ fn suggestion_for(root: &Path, id: &str) -> Option<&'static str> {
 }
 
 /// Generate the full prompt text.
-pub fn render(root: &Path) -> String {
+pub fn render(root: &Path, surface: &str) -> String {
     let mut out = String::new();
     out.push_str("# prodgate coding rules\n\n");
     out.push_str(
@@ -103,6 +103,13 @@ pub fn render(root: &Path) -> String {
 
     let blocks = collect_blocks(root);
     for (i, mut b) in blocks.into_iter().enumerate() {
+        if !crate::gate::applies_to_surface(b.id, surface) {
+            out.push_str(&format!(
+                "## {}. {} — NOT APPLICABLE (this is a `{}` project)\n\n",
+                i + 1, b.id, surface
+            ));
+            continue;
+        }
         b.suggestion = suggestion_for(root, b.id);
         out.push_str(&format!("## {}. {}\n\n", i + 1, b.id));
         out.push_str(&format!("Goal: {}\n\n", b.description));
@@ -136,7 +143,7 @@ pub fn render(root: &Path) -> String {
 }
 
 /// Structured form for `--json` / MCP.
-pub fn sections(root: &Path) -> Vec<crate::json::Json> {
+pub fn sections(root: &Path, surface: &str) -> Vec<crate::json::Json> {
     use crate::json::Json;
     let mut blocks = collect_blocks(root);
     for b in &mut blocks {
@@ -147,6 +154,10 @@ pub fn sections(root: &Path) -> Vec<crate::json::Json> {
         .map(|b| {
             Json::Obj(vec![
                 ("id".into(), Json::Str(b.id.into())),
+                (
+                    "applicable".into(),
+                    Json::Bool(crate::gate::applies_to_surface(b.id, surface)),
+                ),
                 ("description".into(), Json::Str(b.description.into())),
                 (
                     "suggestion".into(),

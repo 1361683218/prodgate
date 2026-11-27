@@ -240,7 +240,9 @@ fn main() {
             }
             "prompt" => {
                 use prodgate::json::Json;
-                let sections = prodgate::prompt::sections(root);
+                let cfg = gate::load_config(root);
+                let cases_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+                let sections = prodgate::prompt::sections(cases_root, &cfg.surface);
                 let doc = Json::Obj(vec![
                     ("tool".into(), Json::Str("prodgate".into())),
                     ("command".into(), Json::Str("prompt".into())),
@@ -259,7 +261,9 @@ fn main() {
             "cases" => print_cases(root),
             "mutate" => print_mutation(),
             "prompt" => {
-                print!("{}", prodgate::prompt::render(root));
+                let cfg = gate::load_config(root);
+                let cases_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+                print!("{}", prodgate::prompt::render(cases_root, &cfg.surface));
                 true
             }
             "all" => {

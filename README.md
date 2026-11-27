@@ -91,7 +91,9 @@ Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recu
 
 输出从**规则库 + 通过验证的案例库**生成，每条规则带真实 commit 里的坏写法、好写法、修复指令和来源。规则和案例库变了，提示词自动跟着变——不会出现"文档说一套、gate 查另一套"。
 
-MCP 里对应 `prodgate_prompt` tool。推荐的工作流：AI 开始写代码前调用它，写完调用 `prodgate_gate` 验证。
+`prompt` 会读目标项目的 `prodgate.conf`，按 `surface` 裁剪：CLI 项目不会收到 CORS/RLS 这些完整示例，只看到一行 "NOT APPLICABLE"。这样 AI 的注意力留在真正相关的控制上。判定逻辑和 gate 共用同一个函数——被 gate 标为 NOT-ASSESSED 的规则，绝不会在 prompt 里被当成可执行建议。
+
+MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。推荐的工作流：AI 开始写代码前调用它，写完调用 `prodgate_gate` 验证。
 
 ## 它检查什么
 
