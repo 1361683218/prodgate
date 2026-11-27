@@ -70,6 +70,37 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
     Ok(issues.len())
 }
 
+/// Collect every finding a rule has in a file, not just the first.
+///
+/// Rules return a single `Option<Finding>` by design — that contract keeps
+/// them replayable. To report all problems at once (an AI should not have to
+/// fix one, re-scan, fix the next), run the rule repeatedly on a working copy
+/// where already-reported lines are blanked. Line numbers stay intact because
+/// we blank content rather than remove lines. A hard cap prevents loops.
+const MAX_FINDINGS_PER_FILE: usize = 50;
+
+fn collect_findings(rule: &crate::check::Rule, file: &SourceFile, ctx: &RuleCtx<'_>) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let mut working = file.clone();
+    for _ in 0..MAX_FINDINGS_PER_FILE {
+        let Some(f) = (rule.run)(&working, ctx) else { break };
+        // Extract the line number from "path:LINE". Rules with no line in
+        // evidence get one finding and stop — nothing to blank.
+        let line_no = f.evidence.rsplit_once(':').and_then(|(_, n)| n.parse::<usize>().ok());
+        match line_no {
+            Some(n) if n >= 1 && n <= working.lines.len() => {
+                working.lines[n - 1].clear();
+                out.push(f);
+            }
+            _ => {
+                out.push(f);
+                break;
+            }
+        }
+    }
+    out
+}
+
 /// Can this rule be evaluated on the declared surface? Shared by gate and
 /// prompt generation: a rule reported NOT-ASSESSED by the gate must not be
 /// presented as actionable guidance to the AI writing the code.
@@ -246,16 +277,13 @@ fn run_gate_raw(root: &Path) -> GateReport {
             continue;
         }
 
-        let mut hit = None;
+        let mut hits: Vec<Finding> = Vec::new();
         for file in &sources {
-            if let Some(f) = (rule.run)(file, &ctx) {
-                hit = Some(f);
-                break;
-            }
+            hits.extend(collect_findings(&rule, file, &ctx));
         }
-        findings.push(hit.unwrap_or_else(|| {
+        if hits.is_empty() {
             let is_declaration = DECLARATION_RULES.contains(&rule.id);
-            Finding {
+            hits.push(Finding {
                 id: rule.id,
                 verdict: if is_declaration {
                     Verdict::Unconfirmed
@@ -272,8 +300,9 @@ fn run_gate_raw(root: &Path) -> GateReport {
                     format!("{} source file(s) scanned, no signal", sources.len())
                 },
                 suggestion: None,
-            }
-        }));
+            });
+        }
+        findings.extend(hits);
     }
 
     GateReport {
