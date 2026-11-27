@@ -224,7 +224,7 @@ fn uri_with_password(line: &str) -> Option<&'static str> {
                     ];
                     // Only exact placeholder words, not substrings: real
                     // passwords like "password123" must still be caught.
-                    let is_placeholder = placeholder.iter().any(|p| password == *p)
+                    let is_placeholder = placeholder.contains(&password)
                         || password.starts_with("${");
                     if !password.is_empty() && !is_placeholder && password.len() >= 3 {
                         return Some("database connection URI contains inline password");
