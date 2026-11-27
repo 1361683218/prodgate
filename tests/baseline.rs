@@ -97,3 +97,63 @@ fn baseline_write_failure_is_reported_not_swallowed() {
 
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn baseline_survives_line_shifts() {
+    // A baseline keyed by line number breaks the moment someone adds an
+    // import at the top: old issues reappear as new FAILs. Content-addressed
+    // keys must keep matching when the offending line itself is unchanged.
+    let dir = scratch();
+    fs::write(
+        dir.join("src/a.js"),
+        "const a = eval(req.body.x);\nconst b = eval(req.body.y);\n",
+    )
+    .unwrap();
+    assert_eq!(gate::write_baseline(&dir).unwrap(), 2);
+    assert!(gate::run_gate(&dir).passed());
+
+    // Insert two lines at the top; both findings move down two lines.
+    fs::write(
+        dir.join("src/a.js"),
+        "// header\nconst cfg = 1;\nconst a = eval(req.body.x);\nconst b = eval(req.body.y);\n",
+    )
+    .unwrap();
+    let shifted = gate::run_gate(&dir);
+    assert!(shifted.passed(), "line shifts must not resurrect baselined issues");
+    assert_eq!(
+        shifted.findings.iter().filter(|f| f.verdict == Verdict::Baseline).count(),
+        2,
+        "both issues should still be recognized as known"
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn baseline_detects_when_offending_code_changes() {
+    // The mirror of the line-shift test: changing the actual code must make
+    // it a NEW issue, otherwise the baseline would hide real regressions.
+    let dir = scratch();
+    fs::write(dir.join("src/a.js"), "const a = eval(req.body.x);\n").unwrap();
+    gate::write_baseline(&dir).unwrap();
+    assert!(gate::run_gate(&dir).passed());
+
+    fs::write(dir.join("src/a.js"), "const a = eval(req.body.NEW);\n").unwrap();
+    let changed = gate::run_gate(&dir);
+    assert!(!changed.passed(), "changed code must block as a new issue");
+    assert!(changed.findings.iter().any(|f| f.verdict == Verdict::Fail));
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn baseline_file_uses_content_addressed_format() {
+    let dir = scratch();
+    fs::write(dir.join("src/a.js"), "const a = eval(req.body.x);\n").unwrap();
+    gate::write_baseline(&dir).unwrap();
+    let text = fs::read_to_string(dir.join(".prodgate/baseline.txt")).unwrap();
+    assert!(text.contains("eval.injection|src/a.js|"), "new format must be content-addressed");
+    // Old format had a line number after a colon; new one has a hash.
+    let entry = text.lines().find(|l| l.starts_with("eval.injection|")).unwrap();
+    assert!(!entry.rsplit('|').next().unwrap().parse::<usize>().is_ok(),
+        "the trailing component must be a hash, not a line number");
+    fs::remove_dir_all(&dir).ok();
+}

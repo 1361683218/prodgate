@@ -28,7 +28,7 @@ cargo build --offline
 ./target/debug/prodgate gate             # 扫描当前仓库
 ./target/debug/prodgate cases            # 检查案例库
 ./target/debug/prodgate mutate           # 注入已知坏样本，验证规则端到端能检出
-./target/debug/prodgate baseline         # 把当前 FAIL 记为已知问题
+./target/debug/prodgate baseline         # 把当前 FAIL 记为已知问题（内容寻址，行号移动不失配）
 ./target/debug/prodgate --help           # 所有命令和参数
 ./target/debug/prodgate --version        # 版本号
 ```
@@ -96,6 +96,8 @@ Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recu
 `prompt` 会读目标项目的 `prodgate.conf`，按 `surface` 裁剪：CLI 项目不会收到 CORS/RLS 这些完整示例，只看到一行 "NOT APPLICABLE"。这样 AI 的注意力留在真正相关的控制上。判定逻辑和 gate 共用同一个函数——被 gate 标为 NOT-ASSESSED 的规则，绝不会在 prompt 里被当成可执行建议。
 
 MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。推荐的工作流：AI 开始写代码前调用它，写完调用 `prodgate_gate` 验证。
+
+baseline 的条目是**内容寻址**的（`规则|路径|行内容哈希`），不是行号。在文件顶部加 import 不会让已冻结的问题"复活"；改动那行代码本身才会被当成新问题重新拦截。旧格式（行号）仍能读取，但新写入的一律是内容哈希。
 
 ## 它检查什么
 

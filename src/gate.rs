@@ -23,10 +23,44 @@ const DECLARATION_RULES: &[&str] = &[
     "backup",
 ];
 
-/// Stable identity of a finding. Deliberately excludes the note text: an issue
-/// stays the same issue when its description is reworded.
-fn fingerprint(f: &Finding) -> String {
+/// Stable identity of a finding, used for baseline matching.
+///
+/// Content-addressed, NOT line-addressed: `rule|path|line-content-hash`.
+/// Inserting an import at the top of a file shifts every line number; with
+/// line-based keys the old issues "reappear" as new FAILs and the baseline
+/// silently stops working. Hashing the offending line keeps the identity
+/// stable across reformatting that does not touch the offending code.
+/// Changing the code itself changes the hash — that is a different issue and
+/// must block, which is exactly what we want.
+///
+/// Legacy `rule|path:LINE` keys are still accepted by `load_baseline` so an
+/// existing baseline file does not break on upgrade; `write_baseline` only
+/// emits the new format.
+fn fingerprint(f: &Finding, root: &Path) -> String {
+    if let Some((path, line_no)) = f.evidence.rsplit_once(':') {
+        if let Ok(n) = line_no.parse::<usize>() {
+            if let Ok(text) = fs::read_to_string(root.join(path)) {
+                if let Some(line) = text.lines().nth(n.saturating_sub(1)) {
+                    let normalized: String = line.split_whitespace().collect::<Vec<_>>().join(" ");
+                    let hash = fnv1a64(normalized.as_bytes());
+                    return format!("{}|{}|{:016x}", f.id, path, hash);
+                }
+            }
+        }
+    }
+    // Fallback: no readable source line (e.g. config.no-sources). Keep the
+    // old shape; such findings cannot be content-addressed.
     format!("{}|{}", f.id, f.evidence)
+}
+
+/// FNV-1a 64-bit. No external crate; deterministic across platforms.
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
 }
 
 fn baseline_path(root: &Path) -> std::path::PathBuf {
@@ -54,7 +88,7 @@ pub fn write_baseline(root: &Path) -> std::io::Result<usize> {
         .findings
         .iter()
         .filter(|f| f.verdict == Verdict::Fail && f.id != NO_SOURCES_RULE)
-        .map(fingerprint)
+        .map(|f| fingerprint(f, root))
         .collect();
 
     let mut text = String::from("# prodgate baseline — known issues, shrink only\n");
@@ -322,7 +356,7 @@ pub fn run_gate(root: &Path) -> GateReport {
         if f.id == NO_SOURCES_RULE {
             continue;
         }
-        if f.verdict == Verdict::Fail && baseline.contains(&fingerprint(f)) {
+        if f.verdict == Verdict::Fail && baseline.contains(&fingerprint(f, root)) {
             f.verdict = Verdict::Baseline;
             f.note = format!("known issue in baseline: {}", f.note);
         }

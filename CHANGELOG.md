@@ -247,3 +247,11 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 评估后否决了"改 15 条规则签名为 Vec<Finding>"的方案——会动摇 replay/fixture/cases 全部契约，风险大于收益。改用 gate 层屏蔽重扫：规则报出 finding 后清空该行内容（保留行号），重跑同一规则，直到无新 finding。15 条规则零改动，所有契约不变，行号保持正确。加 50 条上限防病态循环。
 
 验证：eval×3 报 3 处（行 1/2/3），跨 2 文件报 2 处，cors 多行窗口不重复报，无信号规则仍只报 1 条 PASS，60 条 eval 触发上限且证据无重复。新增 tests/multi_finding.rs 4 测试。80 测试全过，自举 PASS。
+
+## 第 23 轮：baseline 改为内容寻址
+
+地基缺陷：baseline 的 fingerprint 是 `rule|path:LINE`，绑定行号。实测在文件顶部加一行 import，原来 baselined 的 2 个 eval 问题变成 1 个 FAIL——旧问题"复活"，baseline 静默失效。这对采用 baseline 渐进接入的团队是致命的：任何正常的代码编辑都可能导致门禁突然变红。
+
+改成内容寻址：`rule|path|fnv1a64(规范化行内容)`。行号移动不影响匹配，改动那行代码本身才生成新 fingerprint（正确拦截）。FNV-1a 自实现，无外部依赖。旧格式仍可读取（升级不破坏已有 baseline），新写入一律新格式。读文件失败时 fallback 到旧格式（config.no-sources 这类无行号的 finding）。
+
+验证：加两行后 2 个问题仍被识别为 BASELINE 且 passed=True；改动问题代码后该处重新 FAIL。新增 3 个 baseline 测试。83 测试全过，自举 PASS。
