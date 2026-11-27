@@ -335,3 +335,13 @@ CLI 加 report 命令（--out FILE / --out=FILE），零外部依赖的有参命
 股东理念用在产品上：新增 src/history.rs，每次 gate 往 .prodgate/history.jsonl 追加一条快照（时间/文件数/各 verdict 计数/passed）。append-only 不覆盖，500 条上限，损坏行跳过。HTML 报告读历史画内联 SVG 折线图（FAIL 随时间变化，绿点 PASS 红点 FAIL）。
 
 为避免重复扫描 3492 文件，把 report.rs 的 gate_json 拆成纯 build + gate_json_recording 包装：CLI gate 用 recording 版（记一次），all 和 report 用纯版（不污染历史）。新增 4 个 history 测试。110 测试全过。
+
+## 第 33 轮：增量机制调研报告（用户"多看几个项目怎么做增量"）
+
+用户想多看几个项目怎么做增量。用两个并行 agent 研究：本地 4 个项目（craft-anything/ledger-rs/ledger-ui，craft-libs 上轮已做）+ 外部 5 个（rust-analyzer/tokio/ripgrep/cargo/deno，WebFetch 抓 raw.githubusercontent.com 真实配置）。
+
+结论归纳成四种范式：A 声明式依赖图（craft-libs 的 reads 下沉到 Cargo 元数据可传递；deno/rust-analyzer 的 CI 目录清单扁平无传递）、B 拓扑闸门（tokio basics 四连、rust-analyzer 失败即取消、craft-anything 降频 nightly）、C 维度切分（deno shard、tokio each-feature、cargo 测试名前缀、ripgrep 信号等价剪枝）、D 内容寻址（ledger-rs 的 ev_sha256、prodgate baseline 同源）。
+
+反直觉发现：GitHub 原生 on.push.paths 被五个成熟项目集体回避——merge queue 下必需检查会悬空，改用 job 级 if: skipped + conclusion 聚合。缓存属于"跑得快"不属于"少跑"，rust-analyzer/cargo/ripgrep 刻意不缓存；craft-anything 记录 incremental 目录曾达 46GB——增量的阴暗面是磁盘膨胀。
+
+报告写入 INCREMENTAL-RESEARCH.md，带具体配置证据与 URL 来源，被截断未复查的部分明确标注。去掉易漂移的行数字。
