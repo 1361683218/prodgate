@@ -18,13 +18,21 @@ pub struct CaseMeta {
     pub source: String,
     pub source_url: String,
     pub contributor: String,
+    /// Whether the good/bad sample text is taken from the upstream commit or
+    /// written by us. `real` / `synthetic` / empty (treated as `real` for
+    /// backward compatibility with older cases).
+    pub expression: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provenance {
-    /// Has a real, citable upstream commit.
+    /// Real commit, real sample text.
     Upstream,
-    /// Explicitly marked synthetic — reported, never passed off as real.
+    /// Real, citable commit anchors WHY the control matters, but the good/bad
+    /// sample uses prodgate's expression layer (e.g. an opt-out marker) rather
+    /// than verbatim upstream text. Verifiable source, synthetic sample.
+    Anchored,
+    /// No verifiable source — reported, never passed off as real.
     Synthetic,
     /// Missing or malformed source — rejected from the trusted set.
     Unverified,
@@ -34,9 +42,14 @@ impl Provenance {
     pub fn as_str(self) -> &'static str {
         match self {
             Provenance::Upstream => "upstream",
+            Provenance::Anchored => "anchored",
             Provenance::Synthetic => "synthetic",
             Provenance::Unverified => "UNVERIFIED",
         }
+    }
+    /// A source-backed case can be cited; synthetic cannot.
+    pub fn is_citable(self) -> bool {
+        matches!(self, Provenance::Upstream | Provenance::Anchored)
     }
 }
 
@@ -79,6 +92,8 @@ fn provenance_of(meta: &CaseMeta, errors: &mut Vec<String>) -> Provenance {
         errors.push("missing source field".into());
         return Provenance::Unverified;
     }
+
+    // Synthetic: no verifiable source, and it must not pretend to have one.
     if meta.source == "synthetic" {
         if !meta.source_url.is_empty() {
             errors.push("synthetic case must not carry a source_url".into());
@@ -86,7 +101,8 @@ fn provenance_of(meta: &CaseMeta, errors: &mut Vec<String>) -> Provenance {
         }
         return Provenance::Synthetic;
     }
-    // Real source: must look like owner/repo@sha and carry a https URL.
+
+    // Real source: must look like owner/repo@sha and carry a matching https URL.
     let shape_ok = meta.source.contains('@')
         && meta.source.contains('/')
         && meta.source_url.starts_with("https://")
@@ -95,7 +111,18 @@ fn provenance_of(meta: &CaseMeta, errors: &mut Vec<String>) -> Provenance {
         errors.push("source must be owner/repo@sha with matching https source_url".into());
         return Provenance::Unverified;
     }
-    Provenance::Upstream
+
+    // A real source with a synthetic sample is anchored, not upstream: the
+    // commit proves the risk, but the sample text is ours. Claiming upstream
+    // here would misrepresent where the good/bad code came from.
+    match meta.expression.as_str() {
+        "synthetic" => Provenance::Anchored,
+        "" | "real" => Provenance::Upstream,
+        other => {
+            errors.push(format!("unknown expression value '{}'", other));
+            Provenance::Unverified
+        }
+    }
 }
 
 fn load_sample(dir: &Path) -> Option<SourceFile> {
@@ -131,6 +158,7 @@ pub fn validate(root: &Path) -> Vec<CaseResult> {
                 source: get("source"),
                 source_url: get("source_url"),
                 contributor: get("contributor"),
+                expression: get("expression"),
             };
 
             for (field, value) in [
@@ -184,6 +212,6 @@ pub fn validate(root: &Path) -> Vec<CaseResult> {
 pub fn trusted_count(results: &[CaseResult]) -> usize {
     results
         .iter()
-        .filter(|r| r.valid() && r.provenance == Provenance::Upstream)
+        .filter(|r| r.valid() && r.provenance.is_citable())
         .count()
 }

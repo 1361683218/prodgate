@@ -32,10 +32,29 @@ cases/<rule-id>/<case-id>/
 id = "cors.wildcard/c001"          # 必填
 rule = "cors.wildcard"             # 必填，必须匹配已有规则 id
 title = "一句话说明这个案例是什么"   # 必填
-source = "owner/repo@<sha>"        # 必填；合成案例写 "synthetic"
+source = "owner/repo@<sha>"        # 必填；无来源写 "synthetic"
 source_url = "https://github.com/..." # 真实来源必填且必须 https
 contributor = "你的名字"             # 必填
+expression = "synthetic"           # 样本表达层是合成的（见下方 anchored）
 ```
+
+### source 和 expression 的区别
+
+两个字段回答不同的问题：
+
+- `source` / `source_url`：这个案例**为什么重要**有没有可核验的真实依据。
+- `expression`：`good/` 和 `bad/` 里的**代码文本**是不是逐字来自那个 commit。
+
+四档组合：
+
+| provenance | source | expression | 含义 |
+|---|---|---|---|
+| `upstream` | 真实 commit | `real`（默认） | 真 commit，真代码 |
+| `anchored` | 真实 commit | `synthetic` | 真 commit 证明风险，代码文本是我们按 prodgate 语法写的 |
+| `synthetic` | `synthetic` | — | 无真实来源，纯合成，不许带 URL |
+| `UNVERIFIED` | 缺失/形状错 | — | 拒绝，验证失败 |
+
+`anchored` 是给声明型规则用的。像 `prodgate: rate_limit=off` 这种 opt-out 标记，真实开源项目不会写——它不可能出现在上游 commit 里。但"限流失效会导致什么"有真实 commit 可查。这类案例用真实 commit 锚定风险，用合成文本表达规则，不能冒充 `upstream`。
 
 ## 三条铁律
 
@@ -53,19 +72,26 @@ contributor = "你的名字"             # 必填
 cargo test                          # 案例库是测试门禁的一部分
 ```
 
-输出里 `PROVENANCE` 列分三档：
-- `upstream` — 真实 commit，可核验，计入 trusted_count
-- `synthetic` — 诚实标注的合成案例，允许存在但不冒充真实
+输出里 `PROVENANCE` 列分四档：
+- `upstream` — 真实 commit + 真实代码，可核验
+- `anchored` — 真实 commit 锚定风险，代码文本是合成的；可核验，计入 source-backed
+- `synthetic` — 无真实来源，诚实标注，允许存在但不冒充真实
 - `UNVERIFIED` — 来源缺失/伪造，验证失败
 
 ## 当前案例
 
-| 案例 | 来源 | 意义 |
-|---|---|---|
-| `cors.wildcard/c001` | expressjs/cors@a14f3bca (PR #39) | 真实的 wildcard origin bug 修复，一行 diff |
-| `rls/c001` | supabase/supabase@49bda396 (PR #48394) | 真实的 RLS 安全 footgun：建表忘了 enable，任意登录用户可读写授权表 |
-| `secrets.hardcoded/c001` | synthetic | 合成，来源待补 |
+7 条规则全部有案例，2 个 upstream、4 个 anchored、1 个 synthetic。
 
-后 4 条规则（rate.limit / error.tracking / webhook.idempotency / backup）
-的案例来源还空着——这就是最需要贡献的地方。找到真实的安全修复 commit，
+| 案例 | provenance | 真实依据 |
+|---|---|---|
+| `cors.wildcard/c001` | upstream | expressjs/cors@a14f3bca (PR #39)，wildcard origin bug 的一行修复 |
+| `rls/c001` | upstream | supabase/supabase@49bda396 (PR #48394)，建表忘 enable RLS，任意登录用户可读写授权表 |
+| `rate.limit/c001` | anchored | express-rate-limit@34729c8b，异步限流处理器错误绕过错误中间件，限流失效开放 |
+| `error.tracking/c001` | anchored | sentry-javascript@563e333a，Remix 渲染错误不触发 window.onerror / unhandledrejection |
+| `webhook.idempotency/c001` | anchored | stripe-node@de7a7b72，重试 POST 没有幂等键会重复扣款 |
+| `backup/c001` | anchored | postgres@ebd092bc，pg_dump 忽略扩展配置表外键顺序导致备份无效 |
+| `secrets.hardcoded/c001` | synthetic | 无真实来源，诚实标注 |
+
+最需要贡献的是把 `secrets.hardcoded/c001` 从 synthetic 升级成 upstream——
+找一个真实的凭证泄露修复 commit，用它的真实 diff 做 good/bad 样本。
 按上面的格式提交一个目录就行。

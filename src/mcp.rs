@@ -333,7 +333,7 @@ fn call_cases(root: &Path) -> ToolResult {
         ok &= r.valid();
     }
     text.push_str(&format!(
-        "\n{} case(s), {} trusted upstream, {} invalid\ncases: {}\n",
+        "\n{} case(s), {} source-backed, {} invalid\ncases: {}\n",
         results.len(),
         cases::trusted_count(&results),
         results.iter().filter(|r| !r.valid()).count(),

@@ -85,7 +85,7 @@ pub fn cases_json(root: &Path) -> Json {
         ("tool".into(), s("prodgate")),
         ("command".into(), s("cases")),
         ("passed".into(), Json::Bool(passed)),
-        ("trusted_upstream".into(), Json::Num(cases::trusted_count(&results) as f64)),
+        ("source_backed".into(), Json::Num(cases::trusted_count(&results) as f64)),
         ("invalid".into(), Json::Num(results.iter().filter(|r| !r.valid()).count() as f64)),
         ("cases".into(), Json::Arr(entries)),
     ])

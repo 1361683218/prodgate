@@ -72,3 +72,45 @@ fn case_without_source_is_rejected() {
 
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn all_seven_rules_have_a_case() {
+    use prodgate::check::all_rules;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let results = prodgate::cases::validate(root);
+    let covered: Vec<&str> = results.iter().map(|r| r.meta.rule.as_str()).collect();
+    for rule in all_rules() {
+        assert!(
+            covered.contains(&rule.id),
+            "rule {} has no case in the library",
+            rule.id
+        );
+    }
+    assert_eq!(results.len(), 7);
+    assert!(results.iter().all(|r| r.valid()));
+}
+
+#[test]
+fn anchored_cases_are_citable_but_not_upstream() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let results = prodgate::cases::validate(root);
+    let anchored: Vec<_> = results
+        .iter()
+        .filter(|r| r.provenance == prodgate::cases::Provenance::Anchored)
+        .collect();
+    assert_eq!(anchored.len(), 4, "four declaration rules should be anchored");
+    for r in &anchored {
+        assert!(r.provenance.is_citable());
+        assert!(
+            r.meta.source_url.starts_with("https://github.com/"),
+            "anchored case must carry a verifiable URL"
+        );
+        assert_eq!(r.meta.expression, "synthetic");
+    }
+    let upstream: Vec<_> = results
+        .iter()
+        .filter(|r| r.provenance == prodgate::cases::Provenance::Upstream)
+        .collect();
+    assert_eq!(upstream.len(), 2);
+    assert_eq!(prodgate::cases::trusted_count(&results), 6);
+}

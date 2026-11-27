@@ -90,7 +90,7 @@ fn print_cases(root: &Path) -> bool {
     }
     let trusted = cases::trusted_count(&results);
     println!(
-        "\n{} case(s), {} trusted upstream, {} invalid",
+        "\n{} case(s), {} source-backed, {} invalid",
         results.len(),
         trusted,
         results.iter().filter(|r| !r.valid()).count()

@@ -84,11 +84,11 @@ fn replay_and_cases_json_report_passed() {
     let cases = report::cases_json(root);
     assert!(passed(&cases));
     assert_eq!(
-        cases.get("trusted_upstream").and_then(|v| match v {
+        cases.get("source_backed").and_then(|v| match v {
             Json::Num(n) => Some(*n as i64),
             _ => None,
         }),
-        Some(2)
+        Some(6)
     );
 }
 

@@ -108,3 +108,19 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 做了端到端负向验证：临时把 cors_wildcard 改成永远返回 None，mutate 立刻 4 个 MISS、整体 FAIL（2/6）；恢复后 6/6。证明它不是摆设。CI 因为跑 `all` 自动覆盖 mutate，无需改配置。
 
 新增 tests/mutation.rs 5 个测试（含"空集合不算 PASS"和"一个 MISS 就整体失败"）。全套 42 测试通过，clippy 干净，自举 PASS。
+
+## 第 11 轮：补齐案例库 + anchored provenance
+
+用户要求补上 4 条声明型规则空着的案例来源。先做判断：这 4 条规则检测 `prodgate: key=off`，真实开源项目不会写这种标记，找不到"真实 commit 显式 opt-out"。强行套用会把案例的 good/bad 做成伪造的，破坏案例库"对规则说真话"的原则。
+
+改成找"防护缺失造成真实事故"的 commit 作为风险锚点，逐个核实 diff：
+- rate.limit — express-rate-limit@34729c8b（异步限流错误绕过中间件，限流失效开放）
+- error.tracking — sentry-javascript@563e333a（Remix 渲染错误不触发 window.onerror）
+- webhook.idempotency — stripe-node@de7a7b72（重试 POST 无幂等键重复扣款）
+- backup — postgres@ebd092bc（pg_dump 外键顺序导致备份无效）
+
+但案例的 bad 侧必须用规则能检测的 opt-out 语法，那不是上游代码。现有的 provenance 只有 upstream/synthetic 两档，真实依据只能塞在 note 自由文本里，无法核验。加了第三档 `anchored`：source/source_url 真实可核验 + expression=synthetic 表示样本表达层是合成的。验证器据此区分 upstream（真 commit 真代码）和 anchored（真 commit 合成代码），trusted_count 改为计算所有 citable（upstream + anchored）。
+
+补齐案例时又逼出一个 adapter 缺口：backup 案例用 `.sh` 样本，Language::Unknown 没有注释 token，声明检测不到。加了 Language::Shell 支持 .sh/.bash/.zsh 和 `#` 注释。这是案例库第二次逼出工具缺陷（第一次是第 5 轮的 CORS 规则）。
+
+7 条规则现在全部有案例：2 upstream、4 anchored、1 synthetic，0 invalid。新增 tests/cases.rs 2 个测试（全覆盖 + anchored 判定）。CLI/MCP/JSON 的 "trusted upstream" 改为 "source-backed"，JSON 字段 trusted_upstream → source_backed。全套 44 个测试通过，clippy 干净，自举 PASS。

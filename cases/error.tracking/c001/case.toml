@@ -1,0 +1,8 @@
+id = "error.tracking/c001"
+rule = "error.tracking"
+title = "Render errors invisible to window.onerror and unhandledrejection"
+source = "getsentry/sentry-javascript@563e333a2591bad304eaf2f77bd009acc31d82c8"
+source_url = "https://github.com/getsentry/sentry-javascript/commit/563e333a2591bad304eaf2f77bd009acc31d82c8"
+contributor = "maintainer"
+expression = "synthetic"
+note = "Anchored: Remix dispatched render/scheduler/hydration errors never reach window.onerror or unhandledrejection, so default browser integrations reported nothing. The good/bad text uses prodgate opt-out syntax, not verbatim upstream code; expression=synthetic."

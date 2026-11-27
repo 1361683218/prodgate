@@ -12,6 +12,7 @@ pub enum Language {
     JavaScript,
     TypeScript,
     Go,
+    Shell,
     Unknown,
 }
 
@@ -28,6 +29,7 @@ impl Language {
             "js" | "jsx" => Language::JavaScript,
             "ts" | "tsx" => Language::TypeScript,
             "go" => Language::Go,
+            "sh" | "bash" | "zsh" => Language::Shell,
             _ => Language::Unknown,
         }
     }
@@ -38,7 +40,7 @@ impl Language {
 
     fn comment_tokens(self) -> &'static [&'static str] {
         match self {
-            Language::Python => &["#"],
+            Language::Python | Language::Shell => &["#"],
             Language::Rust | Language::JavaScript | Language::TypeScript | Language::Go => &["//"],
             Language::Unknown => &[],
         }

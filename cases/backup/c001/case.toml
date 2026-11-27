@@ -1,0 +1,8 @@
+id = "backup/c001"
+rule = "backup"
+title = "pg_dump backup invalid due to extension config table ordering"
+source = "postgres/postgres@ebd092bc2a07787b31b249d62033b9c8140a5d85"
+source_url = "https://github.com/postgres/postgres/commit/ebd092bc2a07787b31b249d62033b9c8140a5d85"
+contributor = "maintainer"
+expression = "synthetic"
+note = "Anchored: pg_dump ignored FK ordering between extension config tables, so existing backups could be invalid and restore needed manual reordering. The good/bad text uses prodgate opt-out syntax, not verbatim upstream code; expression=synthetic."

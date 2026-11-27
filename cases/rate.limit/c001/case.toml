@@ -1,0 +1,8 @@
+id = "rate.limit/c001"
+rule = "rate.limit"
+title = "Async rate-limit handler errors never reach error middleware"
+source = "express-rate-limit/express-rate-limit@34729c8ba7b01a46c1b983c597f6b031bcf39841"
+source_url = "https://github.com/express-rate-limit/express-rate-limit/commit/34729c8ba7b01a46c1b983c597f6b031bcf39841"
+contributor = "maintainer"
+expression = "synthetic"
+note = "Anchored: Async rate-limit handler rejections bypassed Express error middleware, so the limiter failed open instead of blocking. The good/bad text uses prodgate opt-out syntax, not verbatim upstream code; expression=synthetic."

@@ -142,7 +142,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 这不是形式主义。做第 5 轮时，我从 `expressjs/cors` 和 `supabase/supabase` 的真实 PR 里各取了一个案例，结果暴露出两个自己写的玩具样本从没覆盖的问题：真实代码把 CORS 的 key 和 wildcard 写在两行，原来的规则要求同一行；修复后的代码里 `options.origin === '*'` 是比较而不是赋值，规则误报了。两个都改掉了。
 
-案例库现在有 3 个案例，其中 2 个带可核验的上游 commit。贡献格式见 `CASES.md`。
+案例库现在覆盖全部 7 条规则：2 个 upstream（真 commit + 真代码）、4 个 anchored（真 commit 证明风险，代码文本按 prodgate 语法合成）、1 个 synthetic（无来源，诚实标注）。贡献格式见 `CASES.md`。
 
 ## 端到端验证（mutate）
 
