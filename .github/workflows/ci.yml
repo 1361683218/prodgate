@@ -10,6 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # The judge must not be changed by the same commit it judges. This is
+      # advisory-only in CI logs; real enforcement is branch protection +
+      # CODEOWNERS review (see REDTEAM.md attack #6).
+      - name: Flag judge-file changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '^(tests/|src/(check|rules_security|mutation|cases|fixture)\.rs|loop/judge\.sh|\.github/workflows/)'; then
+            echo "::warning::This commit changes judge files — human review required (see REDTEAM.md)"
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

@@ -1,0 +1,14 @@
+# 裁判代码：改动必须经过 owner review，不能由 AI 自批。
+# 生效前提：仓库 Settings → Branches → master → Protect branch
+#           → Require a pull request before merging
+#           → Require review from Code Owners
+# 没有这两个设置时本文件只是声明，不会强制。
+*                       @1361683218
+/tests/                 @1361683218
+/src/check.rs           @1361683218
+/src/rules_security.rs  @1361683218
+/src/mutation.rs        @1361683218
+/src/cases.rs           @1361683218
+/src/fixture.rs         @1361683218
+/loop/judge.sh          @1361683218
+/.github/workflows/     @1361683218

@@ -399,3 +399,9 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 关键发现：规则篡改之所以被挡，是因为 mutation/cases 有**独立期望集**，不依赖 all_rules()。前面 37 轮无意中建成了纵深防御——没有任何单层充分，但交叉验证有效。
 
 报告写进 REDTEAM.md，诚实标注不可修的攻击面。原则：本地 all 是 AI 的自我检查，不是安全边界；CI + git 权限才是。
+
+## 第 39 轮：防线现状审计（用户"可以"）
+
+延续红队审计，查"防线在 CI + git 权限"是否真实存在。结果：38 commit 全直推 master、0 PR、无分支保护——这道防线是空的。
+
+代码层补了两样声明：.github/CODEOWNERS（裁判文件需 owner review）、CI 加 Flag judge-file changes 步骤（改 tests/check.rs/mutation/cases/fixture/judge.sh/workflows 时打 warning）。但都是声明性不强制，需用户在 GitHub Settings 开分支保护 + require review from Code Owners 才生效。REDTEAM.md 补了具体操作步骤和"直推 master 全绿不代表可信"的警告。

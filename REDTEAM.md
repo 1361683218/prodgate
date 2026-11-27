@@ -55,3 +55,25 @@ prodgate 的六道门禁能扛住"改代码/改规则/改配置"这三类自指�
 1. 任何新增的门禁都不要只依赖 `all_rules()` —— 要有独立期望集
 2. baseline/prompt/report 这类"信息性"命令不能被 AI 用来改变门禁结果
 3. 裁判代码的保护靠 git 和 CI，不靠提示词里写"请不要改"
+
+## 防线现状审计（2026-11-27 14:44）
+
+红队报告写了"防线在 CI + git 权限"，但实际查了仓库：**38 个 commit 全部直推 master，0 个 PR，没有分支保护**。也就是说这道防线目前是空的——攻击 6（改测试/裁判文件）现在完全可行。
+
+代码层补了两样：
+
+1. `.github/CODEOWNERS` — 声明裁判文件（tests/、check.rs、mutation.rs、cases.rs、fixture.rs、judge.sh、workflows/）需要 owner review
+2. CI 加 `Flag judge-file changes` 步骤 — 提交改了裁判文件时在 CI 日志打 `::warning::`，可审计
+
+**但这两样都是声明性的，不强制**。要真正生效，需要你在 GitHub 网页上做一次：
+
+```
+Settings → Branches → Add branch ruleset for master
+  ✓ Require a pull request before merging
+  ✓ Require approvals (1)
+  ✓ Require review from Code Owners
+```
+
+做完之后：AI 直推 master 会被拒；改裁判文件的 PR 没有你 review 不能合。这才是攻击 6 的真防线。
+
+在此之前，记住一句话：**本地 `all` 全绿不代表代码可信，只代表当前这套（可能被改过的）裁判说它没问题**。
