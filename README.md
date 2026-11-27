@@ -121,6 +121,10 @@ MCP 里对应 `prodgate_regression` tool。
 
 MCP 里对应 `prodgate_efficacy` tool。
 
+## 可视化报告
+
+`prodgate report /path/to/project --out report.html` 生成一个**单文件 HTML 报告**：规则通过率统计、每条 finding 的详情与修复建议、按状态筛选。CSS 和 JS 全部内嵌，无 CDN 无外部资源，离线直接打开。扫描结果里的代码文本会做 HTML 转义，报告本身不会成为注入入口。
+
 ## 它检查什么
 
 | 规则 | 检测什么 | 适用 |

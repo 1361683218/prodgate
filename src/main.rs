@@ -20,6 +20,7 @@ fn help() {
     println!("  prompt     Emit AI coding rules with real good/bad examples (feed-forward)");
     println!("  efficacy   Prompt information-sufficiency experiment on archived AI code");
     println!("  regression Check real-world snapshots for false positives");
+    println!("  report     Generate a self-contained HTML report (--out FILE)");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -186,6 +187,23 @@ struct Args {
     json: bool,
 }
 
+/// Resolve the --out FILE argument. Defaults to prodgate-report.html in cwd.
+/// Parsed directly from argv to avoid widening Args for one command.
+fn out_path() -> std::path::PathBuf {
+    let argv: Vec<String> = env::args().collect();
+    for (i, a) in argv.iter().enumerate() {
+        if a == "--out" {
+            if let Some(v) = argv.get(i + 1) {
+                return std::path::PathBuf::from(v);
+            }
+        }
+        if let Some(v) = a.strip_prefix("--out=") {
+            return std::path::PathBuf::from(v);
+        }
+    }
+    std::path::PathBuf::from("prodgate-report.html")
+}
+
 fn parse_args() -> Result<Option<Args>, i32> {
     let argv: Vec<String> = env::args().skip(1).collect();
 
@@ -199,15 +217,20 @@ fn parse_args() -> Result<Option<Args>, i32> {
     }
 
     let json = argv.iter().any(|a| a == "--json");
-    let positional: Vec<&str> = argv
-        .iter()
-        .map(String::as_str)
-        .filter(|a| !a.starts_with('-'))
-        .collect();
+    // Collect positional args on the raw argv, skipping flags and the value
+    // that follows --out. Index on raw argv so the skip is unambiguous.
+    let mut positional: Vec<&str> = Vec::new();
+    let mut skip_next = false;
+    for a in &argv {
+        if skip_next { skip_next = false; continue; }
+        if a == "--out" { skip_next = true; continue; }
+        if a.starts_with("--out=") || a.starts_with('-') { continue; }
+        positional.push(a);
+    }
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression"];
+    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -278,6 +301,22 @@ fn main() {
                 Path::new(env!("CARGO_MANIFEST_DIR")),
             ))),
             "regression" => emit_json(prodgate::regression::to_json(&prodgate::regression::run())),
+            "report" => {
+                // HTML is a human artifact; --json on report emits metadata
+                // about the generated file rather than the document itself.
+                let doc = report::gate_json(root);
+                let html = prodgate::html_report::render(&doc);
+                let out = out_path();
+                match std::fs::write(&out, html) {
+                    Ok(()) => emit_json(prodgate::json::Json::Obj(vec![
+                        ("tool".into(), prodgate::json::Json::Str("prodgate".into())),
+                        ("command".into(), prodgate::json::Json::Str("report".into())),
+                        ("passed".into(), prodgate::json::Json::Bool(true)),
+                        ("out".into(), prodgate::json::Json::Str(out.display().to_string())),
+                    ])),
+                    Err(e) => { eprintln!("report: failed to write {}: {}", out.display(), e); false }
+                }
+            }
             "prompt" => {
                 use prodgate::json::Json;
                 let cfg = gate::load_config(root);
@@ -300,6 +339,19 @@ fn main() {
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
             "mutate" => print_mutation(),
+            "report" => {
+                let doc = report::gate_json(root);
+                let html = prodgate::html_report::render(&doc);
+                let size = html.len();
+                let out = out_path();
+                match std::fs::write(&out, html) {
+                    Ok(()) => {
+                        println!("report: wrote {} ({} bytes, self-contained)", out.display(), size);
+                        true
+                    }
+                    Err(e) => { eprintln!("report: failed to write {}: {}", out.display(), e); false }
+                }
+            }
             "regression" => {
                 let r = prodgate::regression::run();
                 println!("snapshots            : {}", r.snapshots);

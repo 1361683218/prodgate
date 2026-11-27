@@ -16,7 +16,7 @@ prodgate 把这类"看不见的防护"变成两样东西：
 1. **事前** — `prodgate prompt` 输出一份编码规范，每条规则带真实 commit 里的坏写法、好写法、修复指令，按项目形态裁剪（CLI 项目不会收到 CORS 示例）
 2. **事后** — `prodgate gate` 扫描代码，每个 FAIL 都带一句可直接照做的 `fix:`，一次报出所有位置（不是修一个才冒出下一个）
 
-两者共用同一套规则和修复文案，不会说两套话。
+两者共用同一套规则和修复文案，不会说两套话。第三个出口是 `prodgate report --out report.html`——生成一个自包含的 HTML 仪表板（内联 CSS/JS，无 CDN），浏览器直接打开就能看规则通过率、FAIL 详情和修复建议，拿去给人演示不用解释命令行输出。
 
 15 条规则：10 条信号型（扫真实危险写法） + 5 条声明型（记录团队主动关闭某项防护的决定）。
 
@@ -52,6 +52,7 @@ cargo build --release
 
 ./target/release/prodgate prompt   > AI_CODING_RULES.md  # 写代码前喂给 AI
 ./target/release/prodgate gate /path/to/project          # 写完扫描
+./target/release/prodgate report /path/to/project --out report.html  # 可视化报告
 ./target/release/prodgate all                             # 完整门禁（CI 用一条就够）
 ```
 

@@ -315,3 +315,15 @@ CLI prodgate efficacy（文本+JSON）+ MCP prodgate_efficacy tool。新增 test
 写文档时踩到自己立的规矩：硬编码行数/commit 数会漂移（写 5513 行，加个测试就变 5457；写 28 commit，提交一次就变）。最终去掉这些脆弱数字，只保留有测试守卫的稳定数字（15 规则、18/18、16/16、3492 文件）。新增 docs 测试守 DELIVERY 的关键数字。
 
 101 测试全过，clippy 干净，六道门禁全 PASS。项目到此收尾。
+
+## 第 31 轮：自包含 HTML 可视化报告（用户"嫌 prodgate 太小"）
+
+用户说嫌 prodgate 太小。明确立场：不灌行数（那只会把工具变成垃圾场），但扩真实产品能力。选了缺的一块——终端和 JSON 之外，没有能拿给人看的报告。
+
+新增 src/html_report.rs：把 gate JSON 渲染成单文件 HTML，内联 CSS/JS，无 CDN，离线可打开。含统计卡、状态分布条、规则详情卡、修复建议块、前端筛选。所有嵌入的源码文本走 escape_html() 转义——被扫项目里的 `<script>` 不会变成报告里的活脚本。
+
+CLI 加 report 命令（--out FILE / --out=FILE），零外部依赖的有参命令——因 --out 的值会被误当 positional root，重写了参数解析用 skip_next 标记跳过。
+
+新增 tests/html_report.rs 5 测试：转义覆盖、自包含性（无 link/http/@import）、恶意源码转义、统计与修复展示、空 findings。106 测试全过，clippy 干净。
+
+这是"做大"的正确方式：真实能力增长（~370 行报告模块 + 测试），不是灌水。
