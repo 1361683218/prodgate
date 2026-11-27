@@ -43,6 +43,16 @@ pub fn history_json(root: &Path) -> Json {
     ])
 }
 
+/// `prune` 是维护操作而非门禁：清理过期快照不会让构建失败，只报告删了几条。
+pub fn prune_json(removed: usize) -> Json {
+    Json::Obj(vec![
+        ("tool".into(), s("prodgate")),
+        ("command".into(), s("prune")),
+        ("passed".into(), Json::Bool(true)),
+        ("removed".into(), Json::Num(removed as f64)),
+    ])
+}
+
 /// CLI gate uses this variant so a user-facing scan appends to history.
 /// `all` and `report` call `gate_json` directly and do not pollute history.
 pub fn gate_json_recording(root: &Path) -> Json {

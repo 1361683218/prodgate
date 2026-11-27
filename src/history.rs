@@ -131,6 +131,53 @@ pub fn load(root: &Path) -> Vec<Snapshot> {
         .collect()
 }
 
+/// Delete snapshots older than the 30-day window, always keeping the newest
+/// one. Returns the number of snapshots removed. Unlike `record`, no new
+/// snapshot is appended — pruning is a standalone maintenance operation.
+pub fn prune(root: &Path) -> std::io::Result<usize> {
+    let path = history_path(root);
+    let Ok(text) = fs::read_to_string(&path) else { return Ok(0) };
+
+    // 与 record 同一套容错语义：空行与破损行都不算快照，破损行顺手丢弃。
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    if lines.is_empty() {
+        return Ok(0);
+    }
+    let parsed: Vec<(&str, Option<u64>)> = lines
+        .iter()
+        .map(|&l| {
+            let ts = crate::json::parse(l).ok().and_then(|v| match v.get("ts") {
+                Some(Json::Num(n)) => Some(*n as u64),
+                _ => None,
+            });
+            (l, ts)
+        })
+        .collect();
+    let newest = parsed.iter().filter_map(|(_, ts)| *ts).max();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+
+    let kept: Vec<&str> = parsed
+        .iter()
+        .copied()
+        .filter_map(|(l, ts)| {
+            let ts = ts?;
+            // 窗口外的一律删除；但最新一条必须留下，历史不能因时间流逝而清空。
+            (now.saturating_sub(ts) <= MAX_AGE_SECS || Some(ts) == newest).then_some(l)
+        })
+        .collect();
+
+    let removed = lines.len() - kept.len();
+    if removed > 0 {
+        let body = if kept.is_empty() {
+            String::new()
+        } else {
+            kept.join("\n") + "\n"
+        };
+        fs::write(&path, body)?;
+    }
+    Ok(removed)
+}
+
 pub fn to_json(snaps: &[Snapshot]) -> Json {
     let arr: Vec<Json> = snaps.iter().map(snapshot_json).collect();
     Json::Arr(arr)

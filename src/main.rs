@@ -13,6 +13,7 @@ fn help() {
     println!("Commands:");
     println!("  gate       Scan a project against the rules");
     println!("  history    Show scan history from .prodgate/history.jsonl");
+    println!("  prune      Remove snapshots older than the 30-day window");
     println!("  replay     Check that every rule separates good from bad fixtures");
     println!("  cases      Validate the contribution case library");
     println!("  mutate     Inject known-bad samples into real project layouts");
@@ -100,6 +101,20 @@ fn print_history(root: &Path) -> bool {
     }
     println!("\nhistory: {} snapshot(s)", snaps.len());
     true
+}
+
+/// Text view of pruning: a write operation, but it reports instead of gating.
+fn print_prune(root: &Path) -> bool {
+    match prodgate::history::prune(root) {
+        Ok(removed) => {
+            println!("prune: removed {} stale snapshot(s)", removed);
+            true
+        }
+        Err(e) => {
+            eprintln!("prune: failed to rewrite .prodgate/history.jsonl: {}", e);
+            false
+        }
+    }
 }
 
 fn print_replay(root: &Path) -> bool {
@@ -292,7 +307,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "history", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report", "artifacts"];
+    let valid = ["gate", "history", "prune", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report", "artifacts"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -334,6 +349,13 @@ fn main() {
         match args.command.as_str() {
             "gate" => emit_json(report::gate_json_recording(root)),
             "history" => emit_json(report::history_json(root)),
+            "prune" => match prodgate::history::prune(root) {
+                Ok(removed) => emit_json(report::prune_json(removed)),
+                Err(e) => {
+                    eprintln!("prune: failed to rewrite .prodgate/history.jsonl: {}", e);
+                    false
+                }
+            },
             "replay" => emit_json(report::replay_json(root)),
             "cases" => emit_json(report::cases_json(root)),
             "mutate" => emit_json(report::mutation_json()),
@@ -401,6 +423,7 @@ fn main() {
         match args.command.as_str() {
             "gate" => print_gate(root),
             "history" => print_history(root),
+            "prune" => print_prune(root),
             "replay" => print_replay(root),
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
