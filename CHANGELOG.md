@@ -124,3 +124,17 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 补齐案例时又逼出一个 adapter 缺口：backup 案例用 `.sh` 样本，Language::Unknown 没有注释 token，声明检测不到。加了 Language::Shell 支持 .sh/.bash/.zsh 和 `#` 注释。这是案例库第二次逼出工具缺陷（第一次是第 5 轮的 CORS 规则）。
 
 7 条规则现在全部有案例：2 upstream、4 anchored、1 synthetic，0 invalid。新增 tests/cases.rs 2 个测试（全覆盖 + anchored 判定）。CLI/MCP/JSON 的 "trusted upstream" 改为 "source-backed"，JSON 字段 trusted_upstream → source_backed。全套 44 个测试通过，clippy 干净，自举 PASS。
+
+## 第 12 轮：最后一个案例升级 + secrets 规则修复
+
+把 secrets.hardcoded/c001 从 synthetic 升级成 upstream，案例库 7/7 全部可核验。找到 securevault@3db9bd2f（security: remove hardcoded fallback secrets），good/bad 双侧都逐字来自 server/config/config.js 的 diff。
+
+升级过程中真实样本再次逼出规则缺陷：bad 侧 `JWT_SECRET: process.env.JWT_SECRET || 'securevault_default_secret_change_me'` 规则报 PASS。两个原因叠加：
+1. assignment_eq 只认 `=`，不认对象属性冒号 `:`；
+2. 第 8 轮为压误报加的"值必须含数字"限制，恰好排除了这个纯字母的真实 fallback 值。
+
+修复：assignment_eq 兼容 `:`；rhs 找 `||` / `??` 之后的引号字面量；fallback 模式本身就是强信号（生产环境在环境变量缺失时真的会用这个值），放宽"必须含数字"要求，只要求含字母。普通赋值仍保持原限制，避免误报回归。
+
+验证：真实 commit 的 good/bad 正确区分，10 个既有 real_world 测试无回归，express/flask/gin 三个真实框架仍零误报，自举三项 PASS。新增 2 个真实世界回归（fallback 检出 + env-only 不误报）。
+
+案例库现在 3 upstream + 4 anchored，0 synthetic，0 invalid。测试数 46。注释里找到的 CHAT_KEY 因不在标准凭证键名列表而未检出——这是规则已知的键名白名单边界，不是 bug。

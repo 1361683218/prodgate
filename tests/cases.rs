@@ -32,16 +32,17 @@ fn upstream_cases_have_citable_sources() {
 }
 
 #[test]
-fn synthetic_case_is_labeled_not_passed_off_as_upstream() {
+fn every_shipped_case_has_a_verifiable_source() {
+    // All 7 rules now have a citable source — none is left as bare synthetic.
     let results = cases::validate(root());
-    let synthetic: Vec<_> = results
-        .iter()
-        .filter(|r| r.provenance == Provenance::Synthetic)
-        .collect();
-    assert!(!synthetic.is_empty(), "at least one case should be honestly synthetic");
-    for r in synthetic {
-        assert_eq!(r.meta.source, "synthetic");
-        assert!(r.meta.source_url.is_empty());
+    assert_eq!(results.len(), 7);
+    for r in &results {
+        assert!(
+            r.provenance.is_citable(),
+            "case {} is not source-backed",
+            r.meta.id
+        );
+        assert!(r.meta.source_url.starts_with("https://github.com/"));
     }
 }
 
@@ -111,6 +112,6 @@ fn anchored_cases_are_citable_but_not_upstream() {
         .iter()
         .filter(|r| r.provenance == prodgate::cases::Provenance::Upstream)
         .collect();
-    assert_eq!(upstream.len(), 2);
-    assert_eq!(prodgate::cases::trusted_count(&results), 6);
+    assert_eq!(upstream.len(), 3, "cors, rls and secrets are upstream");
+    assert_eq!(prodgate::cases::trusted_count(&results), 7);
 }

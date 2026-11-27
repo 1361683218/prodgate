@@ -1,1 +1,1 @@
-const api_key = process.env.API_KEY;
+  JWT_SECRET: process.env.JWT_SECRET,

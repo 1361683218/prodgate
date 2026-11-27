@@ -129,3 +129,25 @@ fn wildcard_cors_in_python_and_go_real_styles() {
     let go = "c.Header(\"Access-Control-Allow-Origin\", \"*\")";
     assert_eq!(verdict_web("cors.wildcard", "gin.go", go), Verdict::Fail);
 }
+
+#[test]
+fn hardcoded_env_fallback_is_detected() {
+    // Verbatim from securevault@3db9bd2f, server/config/config.js before the fix.
+    // `JWT_SECRET: process.env.JWT_SECRET || 'literal'` uses the literal when
+    // the env var is missing — a real leak, not a test fixture.
+    let src = "  JWT_SECRET: process.env.JWT_SECRET || 'securevault_default_secret_change_me',";
+    assert_eq!(
+        verdict("secrets.hardcoded", "server/config/config.js", src),
+        Verdict::Fail
+    );
+}
+
+#[test]
+fn env_only_object_property_is_not_a_leak() {
+    // The fixed line from the same commit: no fallback literal.
+    let src = "  JWT_SECRET: process.env.JWT_SECRET,";
+    assert_eq!(
+        verdict("secrets.hardcoded", "server/config/config.js", src),
+        Verdict::Pass
+    );
+}

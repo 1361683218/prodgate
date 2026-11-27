@@ -190,9 +190,9 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         if in_test[i] {
             continue;
         }
-        // Find an `=` that is outside string literals and doc comments. This
-        // avoids treating `?a=1` inside a URL string or example as an
-        // assignment to the preceding identifier.
+        // Find an assignment operator outside strings/comments. Both `=` (let
+        // / property assignment) and `:` (object literal property) count —
+        // `JWT_SECRET: process.env.JWT_SECRET || "literal"` is a real shape.
         let eq = match assignment_eq(line) { Some(p) => p, None => continue };
         let lhs_lower = line[..eq].to_lowercase();
 
@@ -203,8 +203,15 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
             continue;
         }
         let rhs = line[eq + 1..].trim_start();
-        let quote = match rhs.chars().next() { Some(c @ ('"' | '\'')) => c, _ => continue };
-        let literal = rhs.trim_start_matches(quote);
+
+        // Find the first quoted literal on the RHS. It may be a plain value
+        // ("literal") or a hardcoded FALLBACK after `||` / `??` /
+        // `process.env.X ||` — the fallback is more dangerous because it is
+        // actually used when the env var is missing in production.
+        let first_quote = rhs.find(['"', '\'']);
+        let quote_pos = match first_quote { Some(p) => p, None => continue };
+        let quote = rhs.as_bytes()[quote_pos] as char;
+        let literal = &rhs[quote_pos + 1..];
         let end_quote = literal.find(quote).unwrap_or(0);
         let value = &literal[..end_quote];
         let value_lower = value.to_lowercase();
@@ -216,12 +223,28 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
             && !value.chars().any(|c| c.is_whitespace() || c == '/' || c == '\\');
         let has_digit = value.chars().any(|c| c.is_ascii_digit());
         let has_alpha = value.chars().any(|c| c.is_ascii_alphabetic());
-        if end_quote >= 8 && compact && (prefixed(&value_lower) || (has_digit && has_alpha)) {
+        let prefixed_value = prefixed(&value_lower);
+        // An env-var fallback (`process.env.X || "literal"`) is a strong
+        // signal on its own: the literal is what production actually uses
+        // when the variable is missing. It need not contain digits — real
+        // fixes remove values like "securevault_default_secret_change_me".
+        let is_fallback = rhs[..quote_pos].contains("||") || rhs[..quote_pos].contains("??");
+        let suspicious = if is_fallback {
+            has_alpha
+        } else {
+            prefixed_value || (has_digit && has_alpha)
+        };
+        if end_quote >= 8 && compact && suspicious {
+            let note = if is_fallback {
+                "hardcoded credential fallback in env var expression"
+            } else {
+                "credential-looking key assigned a long literal"
+            };
             return Some(Finding {
                 id: "secrets.hardcoded",
                 verdict: Verdict::Fail,
                 evidence: format!("{}:{}", file.path, i + 1),
-                note: "credential-looking key assigned a long literal".into(),
+                note: note.into(),
             });
         }
     }
@@ -243,12 +266,13 @@ fn assignment_eq(line: &str) -> Option<usize> {
         if c == b'"' && !in_char { in_str = !in_str; i += 1; continue; }
         if c == b'\'' && !in_str { in_char = !in_char; i += 1; continue; }
         if !in_str && !in_char {
-            if c == b'=' {
+            if c == b'=' || c == b':' {
                 // Skip comparison operators: ==, ===, !=, >=, <=, =>.
+                // A bare ':' is an object-literal property assignment.
                 let next = bytes.get(i + 1).copied();
                 let prev = if i > 0 { Some(bytes[i - 1]) } else { None };
-                if next == Some(b'=') || prev == Some(b'!') || prev == Some(b'>')
-                    || prev == Some(b'<') || next == Some(b'>') {
+                if c == b'=' && (next == Some(b'=') || prev == Some(b'!') || prev == Some(b'>')
+                    || prev == Some(b'<') || next == Some(b'>')) {
                     i += 1;
                     continue;
                 }

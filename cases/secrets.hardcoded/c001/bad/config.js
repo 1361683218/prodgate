@@ -1,1 +1,1 @@
-const api_key = "FAKE_sample_51H8xQ2eZvKYlo2Cabcdefgh";
+  JWT_SECRET: process.env.JWT_SECRET || 'securevault_default_secret_change_me',

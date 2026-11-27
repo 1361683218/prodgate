@@ -88,7 +88,7 @@ fn replay_and_cases_json_report_passed() {
             Json::Num(n) => Some(*n as i64),
             _ => None,
         }),
-        Some(6)
+        Some(7)
     );
 }
 
