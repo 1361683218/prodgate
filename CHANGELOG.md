@@ -255,3 +255,11 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 改成内容寻址：`rule|path|fnv1a64(规范化行内容)`。行号移动不影响匹配，改动那行代码本身才生成新 fingerprint（正确拦截）。FNV-1a 自实现，无外部依赖。旧格式仍可读取（升级不破坏已有 baseline），新写入一律新格式。读文件失败时 fallback 到旧格式（config.no-sources 这类无行号的 finding）。
 
 验证：加两行后 2 个问题仍被识别为 BASELINE 且 passed=True；改动问题代码后该处重新 FAIL。新增 3 个 baseline 测试。83 测试全过，自举 PASS。
+
+## 第 24 轮：声明型判定改为规则元数据
+
+地基隐患：gate.rs 硬编码 DECLARATION_RULES 清单（5 条）决定"无信号时报 UNCONFIRMED 还是 PASS"，和 check.rs 里真正的声明型规则分离。新增声明型规则若忘了同步清单，会静默报 PASS——假绿灯。tests/docs.rs 也有同样的重复清单。
+
+给 Rule 加 kind: RuleKind（Signal/Declaration）元数据，gate 和 docs 测试全从它读，硬编码清单删除。新增 tests/rule_kind.rs 3 测试：每条规则的 kind 与无信号时的实际 verdict 一致（标错就挂）、两种 kind 都用到了、声明型不把字符串里的 opt-out 当声明。
+
+86 测试全过，自举 PASS。

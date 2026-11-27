@@ -23,8 +23,7 @@ fn readme_rule_count_matches_library() {
         .expect("README must state the signal-rule count");
     let signal = all_rules()
         .iter()
-        .filter(|r| !matches!(r.id,
-            "rate.limit" | "error.tracking" | "webhook.idempotency" | "rls" | "backup"))
+        .filter(|r| r.kind == prodgate::check::RuleKind::Signal)
         .count();
     assert_eq!(n, signal, "README signal-rule count is stale; update it");
 }
@@ -65,8 +64,7 @@ fn benchmark_signal_rule_list_matches() {
     let bench = read("BENCHMARK.md");
     let signal: Vec<_> = all_rules()
         .iter()
-        .filter(|r| !matches!(r.id,
-            "rate.limit" | "error.tracking" | "webhook.idempotency" | "rls" | "backup"))
+        .filter(|r| r.kind == prodgate::check::RuleKind::Signal)
         .map(|r| r.id)
         .collect();
     for id in signal {

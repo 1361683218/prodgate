@@ -12,17 +12,6 @@ const BASELINE_FILE: &str = ".prodgate/baseline.txt";
 /// from the real rule set so baseline cannot freeze a misconfiguration.
 const NO_SOURCES_RULE: &str = "config.no-sources";
 
-/// Declaration rules look for an explicit opt-out marker. No marker means
-/// "nobody said anything", NOT "the control is confirmed present". Report
-/// that as UNCONFIRMED rather than a clean PASS.
-const DECLARATION_RULES: &[&str] = &[
-    "rate.limit",
-    "error.tracking",
-    "webhook.idempotency",
-    "rls",
-    "backup",
-];
-
 /// Stable identity of a finding, used for baseline matching.
 ///
 /// Content-addressed, NOT line-addressed: `rule|path|line-content-hash`.
@@ -316,7 +305,7 @@ fn run_gate_raw(root: &Path) -> GateReport {
             hits.extend(collect_findings(&rule, file, &ctx));
         }
         if hits.is_empty() {
-            let is_declaration = DECLARATION_RULES.contains(&rule.id);
+            let is_declaration = rule.kind == crate::check::RuleKind::Declaration;
             hits.push(Finding {
                 id: rule.id,
                 verdict: if is_declaration {
