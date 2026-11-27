@@ -30,23 +30,51 @@ jobs:
 
       - name: Build
         run: |
-          set -o pipefail
-          cargo build --locked 2>&1 | tee /tmp/build.log
+          set +e
+          cargo build --locked > /tmp/build.log 2>&1
+          code=$?
+          cat /tmp/build.log
+          if [ $code -ne 0 ]; then
+            echo "::error::Build failed (exit $code):"
+            tail -20 /tmp/build.log | sed 's/^/  /'
+            exit $code
+          fi
 
       - name: Test
         run: |
-          set -o pipefail
-          cargo test --locked 2>&1 | tee /tmp/test.log
+          set +e
+          cargo test --locked > /tmp/test.log 2>&1
+          code=$?
+          cat /tmp/test.log
+          if [ $code -ne 0 ]; then
+            echo "::error::Test failed (exit $code):"
+            tail -20 /tmp/test.log | sed 's/^/  /'
+            exit $code
+          fi
 
       - name: Clippy
         run: |
-          set -o pipefail
-          cargo clippy --locked --all-targets -- -D warnings 2>&1 | tee /tmp/clippy.log
+          set +e
+          cargo clippy --locked --all-targets -- -D warnings > /tmp/clippy.log 2>&1
+          code=$?
+          cat /tmp/clippy.log
+          if [ $code -ne 0 ]; then
+            echo "::error::Clippy failed (exit $code):"
+            tail -20 /tmp/clippy.log | sed 's/^/  /'
+            exit $code
+          fi
 
       - name: Full gate
         run: |
-          set -o pipefail
-          cargo run --locked -- all . 2>&1 | tee /tmp/gate.log
+          set +e
+          cargo run --locked -- all . > /tmp/gate.log 2>&1
+          code=$?
+          cat /tmp/gate.log
+          if [ $code -ne 0 ]; then
+            echo "::error::Full gate failed (exit $code):"
+            tail -20 /tmp/gate.log | sed 's/^/  /'
+            exit $code
+          fi
 
       # `all` aggregates every guard. Adding a new sentinel to main.rs is
       # enough to make CI enforce it — no extra workflow step needed.
