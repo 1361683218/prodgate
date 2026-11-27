@@ -1,3 +1,11 @@
 /target/
 .DS_Store
 *.swp
+
+# Ralph Loop: 裁判和指令由人持有，不进版本库（防 AI 改裁判 = 作弊）
+loop/PROMPT.md
+loop/README.md
+loop/judge.sh
+loop/run.sh
+# 运行时快照不进版本库
+.prodgate/history.jsonl

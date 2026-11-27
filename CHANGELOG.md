@@ -361,3 +361,16 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 按项目一贯原则处理：不更新数字，而是去掉脆弱数字。两处都改成"全套测试"，并强化 tests/docs.rs 守卫——当前态文档禁止写死测试数，一次性消灭这类漂移而不是逐个修。新增 benchmark 复现章节守卫。
 
 113 测试全过，clippy 干净，六门全 PASS。体检的价值：发现自己的守卫体系有盲区（只守 README/DELIVERY 关键数字，没守 BENCHMARK 当前态章节），补上。
+
+## 第 36 轮：Ralph Loop 自动循环实验（用户想验证"AI 自己迭代"）
+
+用户想验证 AI 能不能自己调用工具迭代，而不只是每轮手打"继续"。建 loop/ 壳：PROMPT.md（自包含指令）、progress.md（唯一事实源）、judge.sh（独立裁判=prodgate all）、run.sh（bash 循环）。
+
+真跑两轮：两个全新上下文的 agent，只给磁盘文件路径不给对话历史。第1轮实现 prodgate history 命令，第2轮加测试，都自验 PASS，输出 NEXT/COMPLETE。独立验证通过。
+
+三个真实发现：
+1. 提示词漏洞——PROMPT 说"不许改裁判"但没说"不许 commit 裁判"，AI 把整个 loop/ 含 judge.sh 一起 commit 了。修复：裁判/指令从 git 移除由人持有，只有 progress.md 入库。印证"裁判权靠文件隔离，不靠提示词拜托"。
+2. 产物质量超预期——AI 自己加了"读历史必须只读"的断言，这个约束我没提。
+3. 时区细节——UTC 显示而本地+8，裁判测不到没写进去的人类验收点。
+
+实验报告 loop/EXPERIMENT.md。115 测试全过，六门全 PASS。
