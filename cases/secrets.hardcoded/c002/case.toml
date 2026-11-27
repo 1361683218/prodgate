@@ -1,0 +1,7 @@
+id = "secrets.hardcoded/c002"
+rule = "secrets.hardcoded"
+title = "Hardcoded chat encryption key fallback removed"
+source = "pavarvaibhav989-tech/securevault@3db9bd2f8763daf9bcde5cfd567b6a17041aae9c"
+source_url = "https://github.com/pavarvaibhav989-tech/securevault/commit/3db9bd2f8763daf9bcde5cfd567b6a17041aae9c"
+contributor = "upstream"
+note = "Second hunk of the same commit as c001, from server/controllers/chatController.js. CHAT_AES_KEY fell back to a hardcoded AES key used to encrypt messages; production now throws if the variable is missing. Both samples are verbatim from the diff. c001 covered JWT_SECRET; this case covers a key name outside the original exact-match whitelist."

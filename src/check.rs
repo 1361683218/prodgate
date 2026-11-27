@@ -165,6 +165,23 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     None
 }
 
+/// Is the assignment target a credential key? Exact words plus a suffix
+/// pattern (`_key`, `_secret`, ...). The underscore prefix matters: `MONKEY`
+/// ends in "key" but is not a credential, while `chat_key` and `CHAT_AES_KEY`
+/// are. The suffix must have at least 3 identifier chars before it.
+fn credential_key(lhs_lower: &str, exact: &[&str], safe: &[&str]) -> bool {
+    if has_any(lhs_lower, safe) {
+        return false;
+    }
+    if has_any(lhs_lower, exact) {
+        return true;
+    }
+    let trimmed = lhs_lower.trim_end();
+    ["_key", "_secret", "_token", "_password", "_passwd"]
+        .iter()
+        .any(|suffix| trimmed.ends_with(suffix) && trimmed.len() > suffix.len() + 2)
+}
+
 /// Signal rule: inspects every line. Hardcoded secret = long literal assigned
 /// to a credential-looking key, in production code only.
 fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
@@ -184,7 +201,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     let in_test = test_line_mask(&file.lines);
 
     let keys = ["api_key", "apikey", "secret", "token", "password", "passwd", "access_key"];
-    let safe = ["example", "placeholder", "your_", "test_", "dummy", "redact", "fixture"];
+    let safe = ["example", "placeholder", "your_", "test_", "dummy", "redact", "fixture", "public_"];
 
     for (i, line) in file.lines.iter().enumerate() {
         if in_test[i] {
@@ -199,7 +216,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         // Only the LEFT side of the assignment can be a credential key.
         // Scanning the whole line produces false positives when an ordinary
         // string on the right mentions "tokens" or "password".
-        if !has_any(&lhs_lower, &keys) || has_any(&lhs_lower, &safe) {
+        if !credential_key(&lhs_lower, &keys, &safe) {
             continue;
         }
         let rhs = line[eq + 1..].trim_start();

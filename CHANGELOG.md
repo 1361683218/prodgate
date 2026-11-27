@@ -138,3 +138,13 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 验证：真实 commit 的 good/bad 正确区分，10 个既有 real_world 测试无回归，express/flask/gin 三个真实框架仍零误报，自举三项 PASS。新增 2 个真实世界回归（fallback 检出 + env-only 不误报）。
 
 案例库现在 3 upstream + 4 anchored，0 synthetic，0 invalid。测试数 46。注释里找到的 CHAT_KEY 因不在标准凭证键名列表而未检出——这是规则已知的键名白名单边界，不是 bug。
+
+## 第 13 轮：从案例延伸，扩展凭证键名识别
+
+从刚升级的 secrets/c001 案例继续：同一个 securevault commit 有两个 hunk（JWT_SECRET 和 CHAT_KEY），c001 只覆盖了前者。确认 CHAT_KEY fallback 规则报 PASS——键名不在精确白名单里。这是案例库第 4 次逼出规则缺陷。
+
+结构性修复：把"精确词白名单"改成"精确词 + 后缀模式"。`_key` / `_secret` / `_token` / `_password` / `_passwd` 结尾的标识符都算凭证键，但要求下划线前缀和至少 3 个字符（排除 MONKEY 这类非凭证词）。safe 列表加 `public_`（公钥不是秘密）。这不是加特例，而是把键名识别从列举改成模式。
+
+用同一 commit 的第二个 hunk 建 c002 案例（upstream，逐字来自 diff），案例库 8/8 全部 source-backed。mutation 端到端样本从 6 增到 8，新增两个 fallback 场景。
+
+验证：3 个真实凭证键全检出，MONKEY/public_key/test_key 不误报，express/flask/gin 零误报，craft-libs 3492 文件零误报，自举三项 PASS。新增 2 个真实世界回归。放宽 tests/cases.rs 里写死的数量断言——以后加案例不用再改测试。全套 48 测试、clippy 干净。

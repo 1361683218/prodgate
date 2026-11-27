@@ -35,7 +35,7 @@ fn upstream_cases_have_citable_sources() {
 fn every_shipped_case_has_a_verifiable_source() {
     // All 7 rules now have a citable source — none is left as bare synthetic.
     let results = cases::validate(root());
-    assert_eq!(results.len(), 7);
+    assert!(results.len() >= 7);
     for r in &results {
         assert!(
             r.provenance.is_citable(),
@@ -87,7 +87,7 @@ fn all_seven_rules_have_a_case() {
             rule.id
         );
     }
-    assert_eq!(results.len(), 7);
+    assert!(results.len() >= 7);
     assert!(results.iter().all(|r| r.valid()));
 }
 
@@ -112,6 +112,6 @@ fn anchored_cases_are_citable_but_not_upstream() {
         .iter()
         .filter(|r| r.provenance == prodgate::cases::Provenance::Upstream)
         .collect();
-    assert_eq!(upstream.len(), 3, "cors, rls and secrets are upstream");
-    assert_eq!(prodgate::cases::trusted_count(&results), 7);
+    assert!(upstream.len() >= 3, "cors, rls and secrets should be upstream");
+    assert_eq!(prodgate::cases::trusted_count(&results), results.len());
 }

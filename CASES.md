@@ -80,7 +80,7 @@ cargo test                          # 案例库是测试门禁的一部分
 
 ## 当前案例
 
-7 条规则全部有案例，全部可核验：3 个 upstream、4 个 anchored。
+7 条规则全部有案例，共 8 个，全部可核验：4 个 upstream、4 个 anchored。
 
 | 案例 | provenance | 真实依据 |
 |---|---|---|
@@ -91,5 +91,6 @@ cargo test                          # 案例库是测试门禁的一部分
 | `webhook.idempotency/c001` | anchored | stripe-node@de7a7b72，重试 POST 没有幂等键会重复扣款 |
 | `backup/c001` | anchored | postgres@ebd092bc，pg_dump 忽略扩展配置表外键顺序导致备份无效 |
 | `secrets.hardcoded/c001` | upstream | securevault@3db9bd2f，移除 JWT_SECRET 硬编码 fallback，生产环境可能因环境变量缺失而使用公开密钥 |
+| `secrets.hardcoded/c002` | upstream | 同一 commit 的第二个 hunk，移除 CHAT_AES_KEY 硬编码 fallback（聊天加密密钥） |
 
 案例库已全部有真实来源。新案例按上面的格式提交一个目录就行。

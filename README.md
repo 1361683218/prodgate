@@ -142,7 +142,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
 
 这不是形式主义。做第 5 轮时，我从 `expressjs/cors` 和 `supabase/supabase` 的真实 PR 里各取了一个案例，结果暴露出两个自己写的玩具样本从没覆盖的问题：真实代码把 CORS 的 key 和 wildcard 写在两行，原来的规则要求同一行；修复后的代码里 `options.origin === '*'` 是比较而不是赋值，规则误报了。两个都改掉了。
 
-案例库覆盖全部 7 条规则，全部可核验：3 个 upstream（真 commit + 真代码）、4 个 anchored（真 commit 证明风险，代码文本按 prodgate 语法合成）。贡献格式见 `CASES.md`。
+案例库覆盖全部 7 条规则，共 8 个案例，全部可核验：4 个 upstream（真 commit + 真代码）、4 个 anchored（真 commit 证明风险，代码文本按 prodgate 语法合成）。贡献格式见 `CASES.md`。
 
 ## 端到端验证（mutate）
 
@@ -161,9 +161,11 @@ flask headers assignment wildcard      cors.wildcard        yes      OK
 gin Header call wildcard               cors.wildcard        yes      OK
 expressjs/cors PR #39 two-line         cors.wildcard        yes      OK
 hardcoded api key in production        secrets.hardcoded    yes      OK
+hardcoded env fallback (securevault)   secrets.hardcoded    yes      OK
+hardcoded fallback with custom key name secrets.hardcoded    yes      OK
 explicit rls opt-out                   rls                  yes      OK
 
-mutation: 6/6 detected — PASS
+mutation: 8/8 detected — PASS
 ```
 
 这 6 个样本来自真实项目和真实 PR。第 9 轮曾把 Express 的 `setHeader('Access-Control-Allow-Origin', '*')` 注入真实项目，发现规则漏检——`cors.wildcard` 当时只认 `:` 和 `=`，不认函数调用的逗号传参。这类问题 replay 永远发现不了。

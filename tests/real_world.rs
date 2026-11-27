@@ -151,3 +151,32 @@ fn env_only_object_property_is_not_a_leak() {
         Verdict::Pass
     );
 }
+
+#[test]
+fn custom_key_name_fallback_is_detected() {
+    // Second hunk of securevault@3db9bd2f. CHAT_KEY is not in the exact
+    // whitelist; the `_key` suffix pattern must catch it.
+    let src = "const CHAT_KEY = process.env.CHAT_AES_KEY || 'SecureVaultChatKey2024!';";
+    assert_eq!(
+        verdict("secrets.hardcoded", "server/controllers/chatController.js", src),
+        Verdict::Fail
+    );
+}
+
+#[test]
+fn non_credential_words_are_not_flagged_as_keys() {
+    // `MONKEY` ends in "key" without an underscore separator, and public
+    // keys are not secrets. Both must stay clear to avoid false positives.
+    for src in [
+        "const MONKEY = \"Abcd1234Efgh5678\";",
+        "const public_key = \"Abcd1234Efgh5678\";",
+        "const test_key = \"Abcd1234Efgh5678\";",
+    ] {
+        assert_eq!(
+            verdict("secrets.hardcoded", "src/config.rs", src),
+            Verdict::Pass,
+            "false positive on: {}",
+            src
+        );
+    }
+}

@@ -72,6 +72,20 @@ pub fn cases() -> Vec<MutationCase> {
             source: "let api_key = \"FAKE_sample_51H8xQ2eZvKYlo2Cabcdefgh\";\n",
         },
         MutationCase {
+            name: "hardcoded env fallback (securevault)",
+            rule: "secrets.hardcoded",
+            surface: "cli",
+            path: "server/config/config.js",
+            source: "  JWT_SECRET: process.env.JWT_SECRET || 'securevault_default_secret_change_me',\n",
+        },
+        MutationCase {
+            name: "hardcoded fallback with custom key name",
+            rule: "secrets.hardcoded",
+            surface: "cli",
+            path: "server/controllers/chatController.js",
+            source: "const CHAT_KEY = process.env.CHAT_AES_KEY || 'SecureVaultChatKey2024!';\n",
+        },
+        MutationCase {
             name: "explicit rls opt-out",
             rule: "rls",
             surface: "web",
