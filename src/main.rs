@@ -19,6 +19,7 @@ fn help() {
     println!("  all        Replay + mutate + gate (self-bootstrap check, the default)");
     println!("  prompt     Emit AI coding rules with real good/bad examples (feed-forward)");
     println!("  efficacy   Prompt information-sufficiency experiment on archived AI code");
+    println!("  regression Check real-world snapshots for false positives");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -172,7 +173,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy"];
+    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -242,6 +243,7 @@ fn main() {
             "efficacy" => emit_json(prodgate::efficacy::to_json(&prodgate::efficacy::run(
                 Path::new(env!("CARGO_MANIFEST_DIR")),
             ))),
+            "regression" => emit_json(prodgate::regression::to_json(&prodgate::regression::run())),
             "prompt" => {
                 use prodgate::json::Json;
                 let cfg = gate::load_config(root);
@@ -264,6 +266,15 @@ fn main() {
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
             "mutate" => print_mutation(),
+            "regression" => {
+                let r = prodgate::regression::run();
+                println!("snapshots            : {}", r.snapshots);
+                println!("files scanned        : {}", r.files_scanned);
+                println!("false positives      : {}", r.false_positives.len());
+                for fp in &r.false_positives { println!("  FP: {}", fp); }
+                println!("regression: {}", if r.passed { "PASS" } else { "FAIL" });
+                r.passed
+            }
             "efficacy" => {
                 let r = prodgate::efficacy::run(Path::new(env!("CARGO_MANIFEST_DIR")));
                 println!("AI code samples      : {}", r.samples);

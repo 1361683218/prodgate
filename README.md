@@ -99,6 +99,14 @@ MCP 里对应 `prodgate_prompt` tool（可选 `root` 参数，默认 cli）。�
 
 baseline 的条目是**内容寻址**的（`规则|路径|行内容哈希`），不是行号。在文件顶部加 import 不会让已冻结的问题"复活"；改动那行代码本身才会被当成新问题重新拦截。旧格式（行号）仍能读取，但新写入的一律是内容哈希。
 
+## 误报回归快照
+
+`prodgate regression` 扫 `benchmark/regression/` 里 10 个真实形态的代码片段——它们**看起来像规则触发条件但实际安全**：Rust 里叫 `eval` 的普通方法、`app_fingerprint` 里的 `print` 子串、文件格式要求用的 SHA-1、参数化 SQL、`secure_filename` 之后的路径、`shell=False` 的参数列表。
+
+这些是前几轮每一次误报修复的固化。以后改规则如果重新引入任何一个，测试立刻挂——不用再手动扫 7 个外部项目。快照是人工策展的（不是 AI 生成的），守的是**精确率**。
+
+MCP 里对应 `prodgate_regression` tool。
+
 ## 提示词有效性实验
 
 `prodgate efficacy` 回答一个具体问题：prompt 里有没有足够信息，让 AI 避开它实际会犯的错？

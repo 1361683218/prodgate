@@ -279,3 +279,11 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 归档三批 AI 亲写代码（13 个样本）到 benchmark/ai-code/，不再依赖 /tmp。新增 src/efficacy.rs 三步验证：基线扫描（13 FAIL / 10 规则）、prompt 覆盖（10/10 完整 bad/good/fix）、反事实（prompt 教的好写法 10/10 不触发对应规则）。结论：遵守 prompt 足以避免所有观察到的错误——信息充分性成立，行为改变未测。
 
 CLI prodgate efficacy（文本+JSON）+ MCP prodgate_efficacy tool。新增 tests/efficacy.rs 5 测试。91 测试全过。
+
+## 第 27 轮：真实世界回归固化（用户选"再1"）
+
+前几轮的"7 个真实项目零误报"全是手动验证。把每一次误报修复固化成快照：benchmark/regression/ 里 10 个真实形态代码片段——Rust 普通 eval 方法、app_fingerprint 里的 print、MS-OFFCRYPTO 要求的 SHA-1、参数化 SQL、环境变量读密钥、secure_filename 路径、subprocess 列表、JSON.parse、显式 CORS、Go 普通 eval 函数。
+
+新增 src/regression.rs 直接对快照跑全部规则，确认零 FAIL。CLI prodgate regression（文本+JSON）+ MCP prodgate_regression tool。新增 tests/regression.rs 5 测试，包括"守护守护本身"——断言已知 FP 形态仍在快照里，防有人靠删快照让测试通过；以及快照非空、扩展名可识别（防 vacuous pass）。
+
+96 测试全过，clippy 待验，自举 PASS。

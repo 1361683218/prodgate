@@ -150,6 +150,13 @@ fn tools_list() -> Json {
                 schema(vec![], &[]),
             ),
             tool(
+                "prodgate_regression",
+                "Check curated real-world code snapshots for false positives. Each snapshot is a \
+                 real shape that looks like a rule trigger but is safe. Guards precision when \
+                 rules change.",
+                schema(vec![], &[]),
+            ),
+            tool(
                 "prodgate_gate",
                 "Scan a project root against the production-readiness rules. \
                  Returns PASS/FAIL/NOT-ASSESSED for every rule with evidence. \
@@ -216,6 +223,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
         "prodgate_rules" => call_rules(),
         "prodgate_prompt" => call_prompt(args),
         "prodgate_efficacy" => call_efficacy(),
+        "prodgate_regression" => call_regression(),
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
         "prodgate_cases" => with_root(args, call_cases),
@@ -298,6 +306,17 @@ fn call_efficacy() -> ToolResult {
         r.counterfactual_ok, r.rules_hit.len()
     );
     for g in &r.gaps { text.push_str(&format!("GAP: {}\n", g)); }
+    text.push_str(&format!("result: {}\n", if r.passed { "PASS" } else { "FAIL" }));
+    ToolResult::ok(text)
+}
+
+fn call_regression() -> ToolResult {
+    let r = crate::regression::run();
+    let mut text = format!(
+        "False-positive regression:\nsnapshots={} files={} false_positives={}\n",
+        r.snapshots, r.files_scanned, r.false_positives.len()
+    );
+    for fp in &r.false_positives { text.push_str(&format!("FP: {}\n", fp)); }
     text.push_str(&format!("result: {}\n", if r.passed { "PASS" } else { "FAIL" }));
     ToolResult::ok(text)
 }
