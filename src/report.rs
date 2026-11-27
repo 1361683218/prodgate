@@ -29,6 +29,20 @@ pub fn gate_json(root: &Path) -> Json {
     build_gate_json(&gate::run_gate(root))
 }
 
+/// Machine-readable scan history, read from `.prodgate/history.jsonl`.
+/// Viewing history never gates a build, so `passed` is always true — same
+/// convention as the other informational commands (report, prompt, baseline).
+pub fn history_json(root: &Path) -> Json {
+    let snaps = crate::history::load(root);
+    Json::Obj(vec![
+        ("tool".into(), s("prodgate")),
+        ("command".into(), s("history")),
+        ("passed".into(), Json::Bool(true)),
+        ("count".into(), Json::Num(snaps.len() as f64)),
+        ("history".into(), crate::history::to_json(&snaps)),
+    ])
+}
+
 /// CLI gate uses this variant so a user-facing scan appends to history.
 /// `all` and `report` call `gate_json` directly and do not pollute history.
 pub fn gate_json_recording(root: &Path) -> Json {

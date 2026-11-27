@@ -12,6 +12,7 @@ fn help() {
     println!();
     println!("Commands:");
     println!("  gate       Scan a project against the rules");
+    println!("  history    Show scan history from .prodgate/history.jsonl");
     println!("  replay     Check that every rule separates good from bad fixtures");
     println!("  cases      Validate the contribution case library");
     println!("  mutate     Inject known-bad samples into real project layouts");
@@ -54,6 +55,50 @@ fn print_gate(root: &Path) -> bool {
     );
     println!("gate: {}", if report.passed() { "PASS" } else { "FAIL" });
     report.passed()
+}
+
+/// Format a UTC unix timestamp as YYYY-MM-DD HH:MM:SS. No chrono here — the
+/// project is zero-dependency, so use the civil-from-days algorithm directly.
+fn format_ts(ts: u64) -> String {
+    let secs = ts as i64;
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    if m <= 2 { y += 1; }
+    let hh = sod / 3600;
+    let mm = (sod % 3600) / 60;
+    let ss = sod % 60;
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", y, m, d, hh, mm, ss)
+}
+
+/// Text view of the append-only scan history. Read-only: it must not append
+/// a snapshot, otherwise viewing history would change the thing being viewed.
+fn print_history(root: &Path) -> bool {
+    let snaps = prodgate::history::load(root);
+    println!(
+        "{:<21} {:<6} {:<5} {:<5} PASSED",
+        "TIME", "FILES", "FAIL", "PASS"
+    );
+    for s in &snaps {
+        println!(
+            "{:<21} {:<6} {:<5} {:<5} {}",
+            format_ts(s.ts),
+            s.files,
+            s.fail,
+            s.pass,
+            if s.passed { "PASS" } else { "FAIL" }
+        );
+    }
+    println!("\nhistory: {} snapshot(s)", snaps.len());
+    true
 }
 
 fn print_replay(root: &Path) -> bool {
@@ -231,7 +276,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report"];
+    let valid = ["gate", "history", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy", "regression", "report"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -272,6 +317,7 @@ fn main() {
     let ok = if args.json {
         match args.command.as_str() {
             "gate" => emit_json(report::gate_json_recording(root)),
+            "history" => emit_json(report::history_json(root)),
             "replay" => emit_json(report::replay_json(root)),
             "cases" => emit_json(report::cases_json(root)),
             "mutate" => emit_json(report::mutation_json()),
@@ -337,6 +383,7 @@ fn main() {
     } else {
         match args.command.as_str() {
             "gate" => print_gate(root),
+            "history" => print_history(root),
             "replay" => print_replay(root),
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
