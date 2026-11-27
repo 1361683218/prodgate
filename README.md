@@ -163,9 +163,11 @@ expressjs/cors PR #39 two-line         cors.wildcard        yes      OK
 hardcoded api key in production        secrets.hardcoded    yes      OK
 hardcoded env fallback (securevault)   secrets.hardcoded    yes      OK
 hardcoded fallback with custom key name secrets.hardcoded    yes      OK
+AI bare cors() default                 cors.wildcard        yes      OK
+AI placeholder webhook secret          secrets.hardcoded    yes      OK
 explicit rls opt-out                   rls                  yes      OK
 
-mutation: 8/8 detected — PASS
+mutation: 10/10 detected — PASS
 ```
 
 这 6 个样本来自真实项目和真实 PR。第 9 轮曾把 Express 的 `setHeader('Access-Control-Allow-Origin', '*')` 注入真实项目，发现规则漏检——`cors.wildcard` 当时只认 `:` 和 `=`，不认函数调用的逗号传参。这类问题 replay 永远发现不了。
@@ -196,6 +198,7 @@ cargo run --locked -- cases .
 
 ## 其他文档
 
+- `AI-CODE.md` — 强 AI 写的代码会不会犯这些错：实测数据与结论
 - `BENCHMARK.md` — 在真实项目上的扫描结果，以及发现的局限
 - `CASES.md` — 案例库的贡献格式
 - `CHANGELOG.md` — 各轮迭代做过什么

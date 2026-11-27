@@ -90,6 +90,34 @@ fn cors_wildcard(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         .map(|(i, line)| (i + 1, line.as_str()))
         .collect();
 
+    // A bare `cors()` middleware call is the single most common AI-generated
+    // CORS mistake: expressjs/cors defaults origin to '*'. There is no '*'
+    // literal to find — the danger is in the library's default. Detect the
+    // call itself, but not `require('cors')` (an import) or `cors({origin: ...})`
+    // (an explicit configuration).
+    for (no, line) in &code {
+        let lower = line.to_lowercase();
+        if lower.contains("require(") || lower.contains("import ") {
+            continue;
+        }
+        for token in ["cors()", "cors( )"] {
+            if let Some(pos) = lower.find(token) {
+                let after = lower[pos + token.len()..].trim_start();
+                // Bare call: only closing parens / semicolon / whitespace after.
+                // `cors({ origin: ... })` has `{`, so it is an explicit config.
+                let bare = after.chars().all(|c| matches!(c, ')' | ';' | ' ' | '\t'));
+                if bare {
+                    return Some(Finding {
+                        id: "cors.wildcard",
+                        verdict: Verdict::Fail,
+                        evidence: format!("{}:{}", file.path, no),
+                        note: "cors() middleware uses library default wildcard origin".into(),
+                    });
+                }
+            }
+        }
+    }
+
     let has_origin = |line: &str| {
         has_any(line, &["cors", "alloworigin", "allow_origin", "origin"])
     };
@@ -238,6 +266,10 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         // are overwhelmingly test fixtures, not keys.
         let compact = !value.is_empty()
             && !value.chars().any(|c| c.is_whitespace() || c == '/' || c == '\\');
+        // An ALL_CAPS_WITH_UNDERSCORES value is a config KEY NAME (e.g.
+        // ConfigAttribute("SECRET_KEY")), not a credential value. Framework
+        // code is full of these; treating them as secrets is a false positive.
+        let is_config_key_name = value.chars().all(|c| c.is_ascii_uppercase() || c == '_');
         let has_digit = value.chars().any(|c| c.is_ascii_digit());
         let has_alpha = value.chars().any(|c| c.is_ascii_alphabetic());
         let prefixed_value = prefixed(&value_lower);
@@ -246,12 +278,18 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         // when the variable is missing. It need not contain digits — real
         // fixes remove values like "securevault_default_secret_change_me".
         let is_fallback = rhs[..quote_pos].contains("||") || rhs[..quote_pos].contains("??");
-        let suspicious = if is_fallback {
+        // An exact credential word on the left (`WEBHOOK_SECRET`, `API_KEY`)
+        // is stronger evidence than a suffix match: AI models commonly write
+        // placeholder values like "whsec_example_key_replace_this" into these
+        // and forget to replace them. Such a value need not contain digits.
+        // Suffix-only keys (`SOME_KEY`) keep the stricter rule.
+        let strong_key = has_any(&lhs_lower, &keys);
+        let suspicious = if is_fallback || strong_key {
             has_alpha
         } else {
             prefixed_value || (has_digit && has_alpha)
         };
-        if end_quote >= 8 && compact && suspicious {
+        if end_quote >= 8 && compact && !is_config_key_name && suspicious {
             let note = if is_fallback {
                 "hardcoded credential fallback in env var expression"
             } else {

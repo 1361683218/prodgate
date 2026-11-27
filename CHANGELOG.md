@@ -148,3 +148,17 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 用同一 commit 的第二个 hunk 建 c002 案例（upstream，逐字来自 diff），案例库 8/8 全部 source-backed。mutation 端到端样本从 6 增到 8，新增两个 fallback 场景。
 
 验证：3 个真实凭证键全检出，MONKEY/public_key/test_key 不误报，express/flask/gin 零误报，craft-libs 3492 文件零误报，自举三项 PASS。新增 2 个真实世界回归。放宽 tests/cases.rs 里写死的数量断言——以后加案例不用再改测试。全套 48 测试、clippy 干净。
+
+## 第 14 轮：回答"强 AI 会不会犯这些错"
+
+用户提出根本性质疑：强 AI 写的代码会犯这些错吗，这样做有意义吗。用实测回答而不是信念：让写这个项目的同一个模型，在不告知规则的情况下按普通需求写 35 行 Web 服务代码，然后扫自己写的代码。
+
+结果：AI 自然写出了三个问题——裸 `cors()`（库默认 wildcard）、env fallback 密钥、占位符 webhook 密钥。第一个当时被抓到，后两个漏检。这直接证明了方向有价值（AI 确实会犯）同时也暴露了覆盖不足。
+
+修两个漏检：
+1. 裸 `cors()` 调用检测：没有 `*` 字面量可找，改为识别调用本身；`require('cors')` / `cors({origin: ...})` / `cors(opts)` 不误报。中途踩了一个坑：after 是 `);` 不是 `;`，第一次修完仍漏检，debug 打印定位后改为"只由闭合括号/分号/空白组成"。
+2. exact 凭证键名放宽值判断：`WEBHOOK_SECRET = "whsec_example_..."` 不需要含数字，因为 AI 常写这种占位符并真的部署。后缀式键名保持严格。放宽后 flask 的 `ConfigAttribute("SECRET_KEY")` 被误伤，加了全大写配置键名引用的排除。
+
+重扫 AI 代码三个问题全部检出，三个真实框架零误报，48→51 测试全过。三个 AI 场景进 mutation（8→10）和 real_world 回归。
+
+写了 `AI-CODE.md` 诚实记录：信号型规则对 AI 代码有用（这次 3 个真问题），但 5 条声明型规则对 AI 完全无效（AI 不知道 `key=off` 语法）。不承认这个边界就是自欺。

@@ -180,3 +180,48 @@ fn non_credential_words_are_not_flagged_as_keys() {
         );
     }
 }
+
+#[test]
+fn ai_generated_code_patterns_are_detected() {
+    // Written by an AI assistant in a natural "quick web service" scenario,
+    // without mentioning prodgate. All three were initially missed.
+    let cors = "app.use(cors());";
+    assert_eq!(
+        verdict_web("cors.wildcard", "src/server.js", cors),
+        Verdict::Fail,
+        "bare cors() defaults to wildcard origin"
+    );
+    let placeholder = "WEBHOOK_SECRET = \"whsec_example_key_replace_this\"";
+    assert_eq!(
+        verdict_web("secrets.hardcoded", "src/main.py", placeholder),
+        Verdict::Fail,
+        "AI placeholder secret is often deployed unchanged"
+    );
+}
+
+#[test]
+fn typed_config_key_reference_is_not_a_secret() {
+    // Flask framework code: ConfigAttribute("SECRET_KEY") is a key NAME,
+    // not an assigned credential value. Must not be flagged.
+    let src = "secret_key = ConfigAttribute[str | bytes | None](\"SECRET_KEY\")";
+    assert_eq!(
+        verdict("secrets.hardcoded", "src/flask/sansio/app.py", src),
+        Verdict::Pass
+    );
+}
+
+#[test]
+fn explicit_cors_config_is_not_a_wildcard() {
+    for src in [
+        "app.use(cors({ origin: 'https://example.com' }));",
+        "const cors = require('cors');",
+        "app.use(cors(opts));",
+    ] {
+        assert_eq!(
+            verdict_web("cors.wildcard", "src/server.js", src),
+            Verdict::Pass,
+            "false positive on: {}",
+            src
+        );
+    }
+}

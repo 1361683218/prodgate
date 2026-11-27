@@ -86,6 +86,20 @@ pub fn cases() -> Vec<MutationCase> {
             source: "const CHAT_KEY = process.env.CHAT_AES_KEY || 'SecureVaultChatKey2024!';\n",
         },
         MutationCase {
+            name: "AI bare cors() default",
+            rule: "cors.wildcard",
+            surface: "web",
+            path: "src/server.js",
+            source: "app.use(cors());\n",
+        },
+        MutationCase {
+            name: "AI placeholder webhook secret",
+            rule: "secrets.hardcoded",
+            surface: "web",
+            path: "src/main.py",
+            source: "WEBHOOK_SECRET = \"whsec_example_key_replace_this\"\n",
+        },
+        MutationCase {
             name: "explicit rls opt-out",
             rule: "rls",
             surface: "web",
