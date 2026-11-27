@@ -174,3 +174,18 @@ CLI 加 `--help`、`--version`、`--json`。JSON 报告由 `src/report.rs` 生�
 2. UNCONFIRMED 判定：声明型规则（5 条）没看到 opt-out 时不再报 PASS，改为 UNCONFIRMED——"没人声明"不等于"防护到位"。不阻塞构建（passed() 仍只看 FAIL），但报告里明确可见。信号型规则保持 PASS。这是第 8 轮"扫 0 文件假绿灯"的同类修复。
 
 新增 tests/unconfirmed.rs 4 个测试 + real_world 2 个连接串测试。57 测试全过，clippy 干净，自举 PASS，mutation 10/10，cases 8/8。README 加了六种 verdict 的说明表，AI-CODE.md 补了第二批数据和假绿灯分析。
+
+## 第 16 轮：按"AI 代码安全"方向加 SQL 注入规则
+
+用户建议方向：让 AI 写出的代码达到安全。盘点发现 7 条规则里只有 3 条真正是安全（cors/secrets/rls），而 AI 代码实测里最严重的漏检是 SQL 注入——OWASP 第一，AI 极常写 `execute(f"SELECT ... {uid}")`，规则完全没有。
+
+新增信号型规则 `sql.injection`。过程中反复误报，连修多次：
+- `Text("...")` 小写后匹配 `text(`，加标识符词边界
+- 跨行窗口把 UI 代码拼进 SQL 判断，改为极窄的单行 f-string 检测
+- 越界 panic（找不到闭合引号时索引超界），加边界检查
+
+关键结构性 bug 是 secrets 的 exact 关键词用子串匹配：`names_bad_token` 含 "token" 被当强凭证键，`DEFAULT_PASSWORD = "VelvetSweatshop"`（Excel 公开默认密码）被当泄露。改成标识符边界匹配 + `_file`/`default_` 排除。还修了 fallback 判断——`||` 出现在字符串之后是布尔或，不是 fallback；只检查引号之前的部分。
+
+代价（诚实记录）：收紧后的 SQL 规则只认同一行里 f-string 同时含 SQL 动词和插值。真实世界的 SQL 注入常跨行或拆成多段，会漏。宁可漏一些变体，也不能在每次扫描都误报。案例用 Griddy@d24419ce（AI agent 修的真实 SQL 注入 commit）做 anchored，样本压缩成规则能检测的单行形式，note 里说明。
+
+4 个 Rust 项目 + 3 个 Web 框架零误报。AI 代码 db 场景现在同时抓到连接串密码和 SQL 注入。mutation 10→11，案例 8→9，全套 59 测试、clippy 干净、自举 PASS。

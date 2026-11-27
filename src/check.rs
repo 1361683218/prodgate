@@ -245,13 +245,25 @@ fn credential_key(lhs_lower: &str, exact: &[&str], safe: &[&str]) -> bool {
     if has_any(lhs_lower, safe) {
         return false;
     }
-    if has_any(lhs_lower, exact) {
+    if exact_keyword(lhs_lower, exact) {
         return true;
     }
     let trimmed = lhs_lower.trim_end();
     ["_key", "_secret", "_token", "_password", "_passwd"]
         .iter()
         .any(|suffix| trimmed.ends_with(suffix) && trimmed.len() > suffix.len() + 2)
+}
+
+/// Exact keyword with identifier boundaries: `secret` matches `secret` and
+/// `jwt_secret`, but not `secretary` or `names_bad_token` (where "token" is
+/// only part of a longer compound name describing something else).
+fn exact_keyword(lhs: &str, exact: &[&str]) -> bool {
+    let trimmed = lhs.trim_end_matches(|c: char| !c.is_ascii_alphanumeric() && c != '_');
+    exact.iter().any(|word| {
+        trimmed == *word
+            || trimmed.ends_with(&format!("_{}", word))
+            || trimmed.starts_with(&format!("{}_", word))
+    })
 }
 
 /// Signal rule: inspects every line. Hardcoded secret = long literal assigned
@@ -273,7 +285,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     let in_test = test_line_mask(&file.lines);
 
     let keys = ["api_key", "apikey", "secret", "token", "password", "passwd", "access_key"];
-    let safe = ["example", "placeholder", "your_", "test_", "dummy", "redact", "fixture", "public_"];
+    let safe = ["example", "placeholder", "your_", "test_", "dummy", "redact", "fixture", "public_", "_file", "default_"];
 
     for (i, line) in file.lines.iter().enumerate() {
         if in_test[i] {
@@ -305,6 +317,26 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
             continue;
         }
         let rhs = line[eq + 1..].trim_start();
+
+        // A function call on the RHS means the string inside it is an
+        // ARGUMENT, not the assigned value:
+        //   names_bad_token = last.eq_ignore_ascii_case("invalid_token")
+        // The literal is a comparison word, not a credential. Keep the
+        // exception for `process.env.X || "literal"` (a real fallback).
+        let rhs_lower = rhs.to_lowercase();
+        let first_q_pos = rhs_lower.find(['"', '\'']);
+        let before_value = first_q_pos.map(|p| &rhs_lower[..p]).unwrap_or(&rhs_lower);
+        let has_fallback = before_value.contains("||") || before_value.contains("??");
+        if !has_fallback {
+            let call = rhs_lower.find('(').unwrap_or(usize::MAX);
+            let quote = rhs_lower.find(['"', '\'']).unwrap_or(usize::MAX);
+            if call < quote && call > 0 {
+                let ident = rhs_lower[..call].trim_end();
+                if ident.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') {
+                    continue;
+                }
+            }
+        }
 
         // Find the first quoted literal on the RHS. It may be a plain value
         // ("literal") or a hardcoded FALLBACK after `||` / `??` /
@@ -340,7 +372,7 @@ fn secrets_hardcoded(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
         // placeholder values like "whsec_example_key_replace_this" into these
         // and forget to replace them. Such a value need not contain digits.
         // Suffix-only keys (`SOME_KEY`) keep the stricter rule.
-        let strong_key = has_any(&lhs_lower, &keys);
+        let strong_key = exact_keyword(&lhs_lower, &keys);
         let suspicious = if is_fallback || strong_key {
             has_alpha
         } else {
@@ -407,24 +439,32 @@ fn test_line_mask(lines: &[String]) -> Vec<bool> {
     let mut depth: i32 = 0;
     let mut test_depth: Option<i32> = None;
     let mut pending_attr = false;
+    // A `#[cfg(test)] mod tests {` block is conventionally at the end of a
+    // Rust file. Brace counting is unreliable across complex real-world code
+    // (string interpolation, macros, closures), so once such a module opens,
+    // mark every remaining line as test code. This is conservative: it may
+    // skip a few non-test lines after the module, but never misses a test.
+    let mut cfg_test_module = false;
 
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim_start();
         if trimmed.starts_with("#[test]") || trimmed.starts_with("#[cfg(test)]") {
             pending_attr = true;
         }
-        if test_depth.is_some() {
+        if cfg_test_module || test_depth.is_some() {
             mask[i] = true;
         }
         if pending_attr && trimmed.starts_with("fn ") {
-            // The opening brace of this signature raises depth to body level.
             test_depth = Some(depth + 1);
             mask[i] = true;
             pending_attr = false;
         }
+        if pending_attr && (trimmed.starts_with("mod ") || trimmed.starts_with("pub mod ")) {
+            cfg_test_module = true;
+            mask[i] = true;
+            pending_attr = false;
+        }
 
-        // Count braces, ignoring those inside string/char literals roughly by
-        // tracking quote state. Good enough for attribute-driven test bodies.
         let mut in_str = false;
         let mut escaped = false;
         for c in line.chars() {
@@ -492,10 +532,100 @@ fn backup_off(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
     find_opt_out(file, "backup", &format!("{}{}", BACKUP_KEY, DISABLED_VALUE), "backup explicitly disabled")
 }
 
+/// Signal rule: SQL built by string interpolation and passed to an
+/// execution function. Parameterized queries are the safe pattern and must
+/// never be flagged. This is the single most common injection class in
+/// AI-generated data-access code.
+fn sql_injection(file: &SourceFile, _ctx: &RuleCtx<'_>) -> Option<Finding> {
+    let path_lower = file.path.to_lowercase();
+    if ["test", "spec", "fixture", "mock"]
+        .iter()
+        .any(|seg| path_lower.contains(seg))
+    {
+        return None;
+    }
+    let in_test = test_line_mask(&file.lines);
+
+    let exec_fns = [
+        "execute", "executemany", "executescript", "raw(", "query(", "query_raw",
+        "text(",
+    ];
+
+    // Strict signal: a single quoted string that contains BOTH an SQL verb
+    // and an interpolation `{expr}`. Deliberately narrow — broader patterns
+    // (`.format()`, `+` concatenation, multi-line windows) produced false
+    // positives on real frameworks and UI code. Missing those forms is an
+    // accepted tradeoff: a false positive on every scan is worse than a
+    // missed variant.
+    for (i, line) in file.lines.iter().enumerate() {
+        if in_test[i] {
+            continue;
+        }
+        let lower = line.to_lowercase();
+        let trimmed = lower.trim_start();
+        if trimmed.starts_with('#') || trimmed.starts_with("//") {
+            continue;
+        }
+        let has_exec = exec_fns.iter().any(|f| {
+            let mut from = 0;
+            while let Some(rel) = lower[from..].find(f) {
+                let pos = from + rel;
+                let boundary = pos == 0
+                    || (!lower.as_bytes()[pos - 1].is_ascii_alphanumeric()
+                        && lower.as_bytes()[pos - 1] != b'_');
+                if boundary {
+                    return true;
+                }
+                from = pos + 1;
+            }
+            false
+        });
+        if !has_exec {
+            continue;
+        }
+        // Find f-string literals: f"..." or f'...'
+        for marker in ["f\"", "f'"] {
+            let mut from = 0;
+            while from < lower.len() {
+                let rel = match lower[from..].find(marker) {
+                    Some(r) => r,
+                    None => break,
+                };
+                let start = from + rel + 2;
+                if start > lower.len() {
+                    break;
+                }
+                let quote = marker.as_bytes()[1] as char;
+                let tail = &lower[start..];
+                let end = tail.find(quote).unwrap_or(tail.len());
+                let literal = &tail[..end];
+                let sql_verb = ["select ", "insert ", "update ", "delete ",
+                    "drop ", "alter ", "truncate ", "where "];
+                if literal.contains('{') && literal.contains('}')
+                    && sql_verb.iter().any(|v| literal.contains(v))
+                {
+                    return Some(Finding {
+                        id: "sql.injection",
+                        verdict: Verdict::Fail,
+                        evidence: format!("{}:{}", file.path, i + 1),
+                        note: "SQL f-string built with interpolation passed to execute".into(),
+                    });
+                }
+                if start + end >= lower.len() {
+                    break;
+                }
+                from = start + end + 1;
+            }
+        }
+    }
+    None
+}
+
 pub fn all_rules() -> Vec<Rule> {
     vec![
         Rule { id: "cors.wildcard", description: "No wildcard CORS origin", run: cors_wildcard },
         Rule { id: "secrets.hardcoded", description: "No hardcoded credential literals", run: secrets_hardcoded },
+        Rule { id: "sql.injection", description: "No SQL built from string interpolation", run: sql_injection },
         Rule { id: "rate.limit", description: "Rate limiting not explicitly disabled", run: rate_limit_off },
         Rule { id: "error.tracking", description: "Error tracking not explicitly disabled", run: error_tracking_off },
         Rule { id: "webhook.idempotency", description: "Webhook idempotency not explicitly disabled", run: webhook_idempotency_off },

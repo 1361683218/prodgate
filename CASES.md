@@ -80,7 +80,7 @@ cargo test                          # 案例库是测试门禁的一部分
 
 ## 当前案例
 
-7 条规则全部有案例，共 8 个，全部可核验：4 个 upstream、4 个 anchored。
+8 条规则全部有案例，共 9 个，全部可核验：4 个 upstream、5 个 anchored。
 
 | 案例 | provenance | 真实依据 |
 |---|---|---|

@@ -74,7 +74,7 @@ roots=src,api
 surface=web
 ```
 
-`surface=web` 会启用 4 条只对 Web 服务有意义的规则。没有配置文件时用默认值（`src`、cli）。
+`surface=web` 会启用 5 条只对 Web 服务有意义的规则。没有配置文件时用默认值（`src`、cli）。
 
 Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recursive=true` 递归扫描。扫描到 0 个源码文件会报 FAIL（规则是 `config.no-sources`），不会给你一个假的 PASS。这个判定不能被 baseline 冻结。
 
@@ -83,7 +83,8 @@ Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recu
 | 规则 | 检测什么 | 适用 |
 |---|---|---|
 | `cors.wildcard` | 把 CORS origin 设为 `*` | web |
-| `secrets.hardcoded` | 凭证键被赋了一个长字面量 | 全部 |
+| `secrets.hardcoded` | 凭证键被赋了长字面量，或连接串里带明文密码 | 全部 |
+| `sql.injection` | SQL 用 f-string 插值拼出后传给 execute | 全部 |
 | `rate.limit` | 显式关闭限流 | web |
 | `error.tracking` | 显式关闭错误追踪 | 全部 |
 | `webhook.idempotency` | 显式关闭 webhook 幂等 | web |
@@ -92,7 +93,7 @@ Cargo workspace 这类源码分散在 `crates/*/src` 的项目，加一行 `recu
 
 规则有两种写法，区别在它们看什么：
 
-**信号型**只有两条，`cors.wildcard` 和 `secrets.hardcoded`。它们扫全部代码行。字符串里的 `*` 真的会被当成 header 值用，所以不能跳过。
+**信号型**有三条，`cors.wildcard`、`secrets.hardcoded` 和 `sql.injection`。它们扫全部代码行。字符串里的 `*` 真的会被当成 header 值用，所以不能跳过。
 
 另外五条是**声明型**，只在注释里找 `prodgate: <key>=off`。这里有个取舍：静态扫描没法判断一个服务在运行时到底有没有限流，所以 prodgate 不去猜，只认人明确写下的关闭声明。代码字符串里的 `rls=off` 不算，那不是决定。
 

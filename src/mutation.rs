@@ -100,6 +100,13 @@ pub fn cases() -> Vec<MutationCase> {
             source: "WEBHOOK_SECRET = \"whsec_example_key_replace_this\"\n",
         },
         MutationCase {
+            name: "AI SQL f-string injection",
+            rule: "sql.injection",
+            surface: "web",
+            path: "src/db.py",
+            source: "conn.execute(f\"SELECT * FROM users WHERE id = {user_id}\")\n",
+        },
+        MutationCase {
             name: "explicit rls opt-out",
             rule: "rls",
             surface: "web",

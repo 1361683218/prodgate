@@ -253,3 +253,30 @@ fn database_uri_placeholders_are_not_flagged() {
         );
     }
 }
+
+#[test]
+fn ai_sql_injection_is_detected() {
+    // Written naturally by AI in the db scenario of the second batch.
+    let src = "conn.execute(text(f\"SELECT * FROM users WHERE id = {user_id}\"))";
+    assert_eq!(
+        verdict_web("sql.injection", "src/users.py", src),
+        Verdict::Fail
+    );
+}
+
+#[test]
+fn parameterized_sql_is_not_flagged() {
+    for src in [
+        "cursor.execute('SELECT * FROM users WHERE id = %s', (uid,))",
+        "cursor.execute('SELECT * FROM users WHERE id = ?', [uid])",
+        "conn.execute(text('SELECT * FROM users WHERE id = :id'), {'id': uid})",
+        "execute(user_callback)",
+    ] {
+        assert_eq!(
+            verdict_web("sql.injection", "src/db.py", src),
+            Verdict::Pass,
+            "false positive on: {}",
+            src
+        );
+    }
+}

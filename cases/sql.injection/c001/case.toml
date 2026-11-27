@@ -1,0 +1,8 @@
+id = "sql.injection/c001"
+rule = "sql.injection"
+title = "Node IDs interpolated into SQL IN clause instead of parameterized"
+source = "aperetti/Griddy@d24419cece91da3ef11004fff4185a394868e11f"
+source_url = "https://github.com/aperetti/Griddy/commit/d24419cece91da3ef11004fff4185a394868e11f"
+contributor = "maintainer"
+expression = "synthetic"
+note = "Anchored: this real commit (authored by an AI agent) fixed SQL injection where downstream node IDs were interpolated into `node_id IN (...)` with f-strings; the fix uses ? placeholders. The upstream bad code builds the query across several lines/statements; the sample here compresses it into the single-line f-string form this rule detects. expression=synthetic."

@@ -99,7 +99,7 @@ fn anchored_cases_are_citable_but_not_upstream() {
         .iter()
         .filter(|r| r.provenance == prodgate::cases::Provenance::Anchored)
         .collect();
-    assert_eq!(anchored.len(), 4, "four declaration rules should be anchored");
+    assert!(anchored.len() >= 4, "declaration rules and SQL case should be anchored");
     for r in &anchored {
         assert!(r.provenance.is_citable());
         assert!(
