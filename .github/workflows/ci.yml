@@ -67,7 +67,7 @@ jobs:
       - name: Full gate
         run: |
           set +e
-          cargo run --locked -- all . > /tmp/gate.log 2>&1
+          cargo run --locked --bin prodgate -- all . > /tmp/gate.log 2>&1
           code=$?
           cat /tmp/gate.log
           if [ $code -ne 0 ]; then
