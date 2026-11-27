@@ -32,6 +32,7 @@ fn help() {
 
 fn print_gate(root: &Path) -> bool {
     let report = gate::run_gate(root);
+    let _ = prodgate::history::record(root, &report);
     println!("{:<22} {:<14} NOTE", "RULE", "VERDICT");
     for f in &report.findings {
         println!("{:<22} {:<14} {}", f.id, f.verdict.as_str(), f.note);
@@ -270,7 +271,7 @@ fn main() {
 
     let ok = if args.json {
         match args.command.as_str() {
-            "gate" => emit_json(report::gate_json(root)),
+            "gate" => emit_json(report::gate_json_recording(root)),
             "replay" => emit_json(report::replay_json(root)),
             "cases" => emit_json(report::cases_json(root)),
             "mutate" => emit_json(report::mutation_json()),
@@ -305,7 +306,8 @@ fn main() {
                 // HTML is a human artifact; --json on report emits metadata
                 // about the generated file rather than the document itself.
                 let doc = report::gate_json(root);
-                let html = prodgate::html_report::render(&doc);
+                let snaps = prodgate::history::load(root);
+                let html = prodgate::html_report::render_with_history(&doc, &snaps);
                 let out = out_path();
                 match std::fs::write(&out, html) {
                     Ok(()) => emit_json(prodgate::json::Json::Obj(vec![
@@ -341,7 +343,8 @@ fn main() {
             "mutate" => print_mutation(),
             "report" => {
                 let doc = report::gate_json(root);
-                let html = prodgate::html_report::render(&doc);
+                let snaps = prodgate::history::load(root);
+                let html = prodgate::html_report::render_with_history(&doc, &snaps);
                 let size = html.len();
                 let out = out_path();
                 match std::fs::write(&out, html) {

@@ -14,6 +14,7 @@ pub mod check;
 pub mod efficacy;
 pub mod fixture;
 pub mod gate;
+pub mod history;
 pub mod html_report;
 pub mod json;
 pub mod mcp;

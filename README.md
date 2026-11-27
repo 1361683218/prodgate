@@ -125,6 +125,8 @@ MCP 里对应 `prodgate_efficacy` tool。
 
 `prodgate report /path/to/project --out report.html` 生成一个**单文件 HTML 报告**：规则通过率统计、每条 finding 的详情与修复建议、按状态筛选。CSS 和 JS 全部内嵌，无 CDN 无外部资源，离线直接打开。扫描结果里的代码文本会做 HTML 转义，报告本身不会成为注入入口。
 
+每次 `prodgate gate` 会往 `.prodgate/history.jsonl` **追加**一条快照（append-only，不覆盖）。报告读取这些快照画出 FAIL 数量随时间变化的折线图——它记录的是"这个项目在变好还是变坏"，不是某一刻的截面。历史有 500 条上限，损坏的行会被跳过而不是让整个历史不可读。
+
 ## 它检查什么
 
 | 规则 | 检测什么 | 适用 |

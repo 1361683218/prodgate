@@ -327,3 +327,11 @@ CLI 加 report 命令（--out FILE / --out=FILE），零外部依赖的有参命
 新增 tests/html_report.rs 5 测试：转义覆盖、自包含性（无 link/http/@import）、恶意源码转义、统计与修复展示、空 findings。106 测试全过，clippy 干净。
 
 这是"做大"的正确方式：真实能力增长（~370 行报告模块 + 测试），不是灌水。
+
+## 第 32 轮：扫描历史趋势（用户要看增量，顺带产品化）
+
+用户想看别人的项目怎么做增量。研究了 craft-libs（143万行 Rust workspace）：四层收窄——crate 物理拆分、每 crate 独立 workflow 的 paths 过滤、[package.metadata.craft] reads 声明跨 crate 依赖自动算影响范围、定时全量兜底保缓存不过期。核心洞察：增量不是跑得快，是少跑——靠结构拆分让影响范围可计算。
+
+股东理念用在产品上：新增 src/history.rs，每次 gate 往 .prodgate/history.jsonl 追加一条快照（时间/文件数/各 verdict 计数/passed）。append-only 不覆盖，500 条上限，损坏行跳过。HTML 报告读历史画内联 SVG 折线图（FAIL 随时间变化，绿点 PASS 红点 FAIL）。
+
+为避免重复扫描 3492 文件，把 report.rs 的 gate_json 拆成纯 build + gate_json_recording 包装：CLI gate 用 recording 版（记一次），all 和 report 用纯版（不污染历史）。新增 4 个 history 测试。110 测试全过。

@@ -69,6 +69,9 @@ h1{font-size:26px;margin:0 0 4px}
 .filter button{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit;color:var(--muted)}
 .filter button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .hidden{display:none}
+.trend{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:28px}
+.trend h2{font-size:14px;margin:0 0 12px;font-weight:500}
+.trend .hint{color:var(--muted);font-size:12px;margin-top:8px}
 .foot{color:var(--muted);font-size:12px;margin-top:32px;border-top:1px solid var(--line);padding-top:16px}
 "#;
 
@@ -108,8 +111,64 @@ fn render_finding(f: &Json) -> String {
     s
 }
 
+/// Render an inline SVG trend line from scan history. No external library.
+/// Returns an empty string when there is nothing to plot.
+fn render_trend(snaps: &[crate::history::Snapshot]) -> String {
+    if snaps.len() < 2 { return String::new(); }
+    let w = 1000.0_f64;
+    let h = 140.0_f64;
+    let pad = 8.0_f64;
+    let n = snaps.len();
+    let step = if n > 1 { (w - 2.0 * pad) / (n - 1) as f64 } else { 0.0 };
+    let y = |fail: usize| -> f64 {
+        // Top = more fails is worse; scale to max fail in the series.
+        let max_fail = snaps.iter().map(|s| s.fail).max().unwrap_or(1).max(1);
+        pad + (1.0 - fail as f64 / max_fail as f64) * (h - 2.0 * pad)
+    };
+    let mut pts = Vec::new();
+    for (i, s) in snaps.iter().enumerate() {
+        pts.push(format!("{:.1},{:.1}", pad + i as f64 * step, y(s.fail)));
+    }
+    let polyline = pts.join(" ");
+    let first = snaps.first().unwrap();
+    let last = snaps.last().unwrap();
+    let mut out = String::new();
+    out.push_str("<div class=\"trend\"><h2>FAIL count over scans</h2>");
+    out.push_str(&format!(
+        "<svg viewBox=\"0 0 {:.0} {:.0}\" width=\"100%\" height=\"160\" role=\"img\">",
+        w, h
+    ));
+    out.push_str(&format!(
+        "<path d=\"M0,{:.1} H{:.0}\" stroke=\"var(--color-border-tertiary)\" stroke-width=\"0.5\" fill=\"none\"/>",
+        h - pad, w
+    ));
+    out.push_str(&format!(
+        "<polyline points=\"{}\" fill=\"none\" stroke=\"var(--fail-color,#cf222e)\" stroke-width=\"2\"/>",
+        polyline
+    ));
+    for (i, s) in snaps.iter().enumerate() {
+        let color = if s.passed { "#1a7f37" } else { "#cf222e" };
+        out.push_str(&format!(
+            "<circle cx=\"{:.1}\" cy=\"{:.1}\" r=\"3\" fill=\"{}\"/>",
+            pad + i as f64 * step, y(s.fail), color
+        ));
+    }
+    out.push_str("</svg>");
+    out.push_str(&format!(
+        "<div class=\"hint\">{} scans recorded · FAIL {} → {} · green = PASS, red = FAIL</div>",
+        n, first.fail, last.fail
+    ));
+    out.push_str("</div>");
+    out
+}
+
 /// Render a gate JSON document into a complete standalone HTML page.
+/// Render without history (used by tests and callers without a project root).
 pub fn render(doc: &Json) -> String {
+    render_with_history(doc, &[])
+}
+
+pub fn render_with_history(doc: &Json, snaps: &[crate::history::Snapshot]) -> String {
     let passed = matches!(doc.get("passed"), Some(Json::Bool(true)));
     let files = doc.get("files_scanned")
         .and_then(|v| match v { Json::Num(n) => Some(*n as usize), _ => None })
@@ -170,6 +229,8 @@ pub fn render(doc: &Json) -> String {
             }
         }
         s.push_str("</div>");
+
+        s.push_str(&render_trend(snaps));
 
         s.push_str("<div class=\"filter\">");
         s.push_str("<button class=\"on\" data-k=\"all\" onclick=\"filter('all')\">All</button>");

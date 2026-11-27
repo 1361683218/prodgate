@@ -26,7 +26,18 @@ fn finding(f: &check::Finding) -> Json {
 }
 
 pub fn gate_json(root: &Path) -> Json {
+    build_gate_json(&gate::run_gate(root))
+}
+
+/// CLI gate uses this variant so a user-facing scan appends to history.
+/// `all` and `report` call `gate_json` directly and do not pollute history.
+pub fn gate_json_recording(root: &Path) -> Json {
     let report = gate::run_gate(root);
+    let _ = crate::history::record(root, &report);
+    build_gate_json(&report)
+}
+
+fn build_gate_json(report: &gate::GateReport) -> Json {
     let known_issues = report
         .findings
         .iter()
