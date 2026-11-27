@@ -142,6 +142,14 @@ fn tools_list() -> Json {
                 schema(vec![("root", root_property())], &[]),
             ),
             tool(
+                "prodgate_efficacy",
+                "Prompt information-sufficiency experiment: scans archived AI-written code, \
+                 checks that every rule it violated is fully covered by the prompt, and that \
+                 the good form the prompt teaches passes the gate. Reports coverage and \
+                 counterfactual results. Does NOT measure AI behavior change.",
+                schema(vec![], &[]),
+            ),
+            tool(
                 "prodgate_gate",
                 "Scan a project root against the production-readiness rules. \
                  Returns PASS/FAIL/NOT-ASSESSED for every rule with evidence. \
@@ -207,6 +215,7 @@ fn handle_tool_call(id: Json, params: Option<&Json>) -> Option<String> {
     let result = match name {
         "prodgate_rules" => call_rules(),
         "prodgate_prompt" => call_prompt(args),
+        "prodgate_efficacy" => call_efficacy(),
         "prodgate_gate" => with_root(args, call_gate),
         "prodgate_replay" => with_root(args, call_replay),
         "prodgate_cases" => with_root(args, call_cases),
@@ -276,6 +285,21 @@ fn call_prompt(args: Option<&Json>) -> ToolResult {
         .map(|r| gate::load_config(Path::new(r)).surface)
         .unwrap_or_else(|| "cli".to_string());
     ToolResult::ok(crate::prompt::render(cases_root, &surface))
+}
+
+fn call_efficacy() -> ToolResult {
+    let r = crate::efficacy::run(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut text = format!(
+        "Prompt efficacy (information sufficiency only, not AI behavior):\n\
+         samples={} with_findings={} baseline_fails={}\n\
+         rules_hit={} prompt_covered={}/{} counterfactual_ok={}/{}\n",
+        r.samples, r.samples_with_findings, r.baseline_findings,
+        r.rules_hit.len(), r.covered, r.rules_hit.len(),
+        r.counterfactual_ok, r.rules_hit.len()
+    );
+    for g in &r.gaps { text.push_str(&format!("GAP: {}\n", g)); }
+    text.push_str(&format!("result: {}\n", if r.passed { "PASS" } else { "FAIL" }));
+    ToolResult::ok(text)
 }
 
 fn call_gate(root: &Path) -> ToolResult {

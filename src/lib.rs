@@ -11,6 +11,7 @@
 pub mod adapter;
 pub mod cases;
 pub mod check;
+pub mod efficacy;
 pub mod fixture;
 pub mod gate;
 pub mod json;

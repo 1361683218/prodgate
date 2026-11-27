@@ -271,3 +271,11 @@ prompt 的 suggestion 通过跑案例的 bad 样本从 rule 函数取，保证�
 给 Rule 加 web_only: bool，applies_to_surface 改为从 Rule 读，RuleBlock 也直接存该字段（避免反复查 all_rules）。tests/prompt.rs 从元数据推导 web 规则清单，README 不再写死数字。
 
 至此"单一事实源"收敛完成：规则类型（kind）、适用 surface（web_only）、判定位置、文档数字、baseline 身份、案例来源全部单一来源 + 测试守卫。86 测试全过，clippy 干净，自举 PASS。
+
+## 第 26 轮：闭环实验框架（用户选"先2"）
+
+用户先前问"这样做有意义么"，这轮建立可复现的实验回答能回答的那部分。诚实前提：环境无法现场生成 AI 代码，所以验证的是信息充分性而非行为改变——报告里每一处都标注 scope。
+
+归档三批 AI 亲写代码（13 个样本）到 benchmark/ai-code/，不再依赖 /tmp。新增 src/efficacy.rs 三步验证：基线扫描（13 FAIL / 10 规则）、prompt 覆盖（10/10 完整 bad/good/fix）、反事实（prompt 教的好写法 10/10 不触发对应规则）。结论：遵守 prompt 足以避免所有观察到的错误——信息充分性成立，行为改变未测。
+
+CLI prodgate efficacy（文本+JSON）+ MCP prodgate_efficacy tool。新增 tests/efficacy.rs 5 测试。91 测试全过。

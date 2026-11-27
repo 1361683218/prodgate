@@ -18,6 +18,7 @@ fn help() {
     println!("  baseline   Record current FAILs as known issues");
     println!("  all        Replay + mutate + gate (self-bootstrap check, the default)");
     println!("  prompt     Emit AI coding rules with real good/bad examples (feed-forward)");
+    println!("  efficacy   Prompt information-sufficiency experiment on archived AI code");
     println!();
     println!("Options:");
     println!("  --json     Emit a machine-readable JSON report on stdout");
@@ -171,7 +172,7 @@ fn parse_args() -> Result<Option<Args>, i32> {
 
     // No positional command: preserve the historical default of `all`.
     let command = positional.first().copied().unwrap_or("all").to_string();
-    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt"];
+    let valid = ["gate", "replay", "baseline", "cases", "mutate", "all", "prompt", "efficacy"];
     if !valid.contains(&command.as_str()) {
         eprintln!("unknown command: {} (try --help)", command);
         return Err(2);
@@ -238,6 +239,9 @@ fn main() {
                     }
                 }
             }
+            "efficacy" => emit_json(prodgate::efficacy::to_json(&prodgate::efficacy::run(
+                Path::new(env!("CARGO_MANIFEST_DIR")),
+            ))),
             "prompt" => {
                 use prodgate::json::Json;
                 let cfg = gate::load_config(root);
@@ -260,6 +264,19 @@ fn main() {
             "baseline" => print_baseline(root),
             "cases" => print_cases(root),
             "mutate" => print_mutation(),
+            "efficacy" => {
+                let r = prodgate::efficacy::run(Path::new(env!("CARGO_MANIFEST_DIR")));
+                println!("AI code samples      : {}", r.samples);
+                println!("with findings        : {}", r.samples_with_findings);
+                println!("baseline FAILs       : {}", r.baseline_findings);
+                println!("rules hit            : {}", r.rules_hit.len());
+                println!("prompt-covered       : {}/{}", r.covered, r.rules_hit.len());
+                println!("counterfactual ok    : {}/{}", r.counterfactual_ok, r.rules_hit.len());
+                for g in &r.gaps { println!("  GAP: {}", g); }
+                println!("\nscope: information sufficiency only - does NOT measure AI behavior change");
+                println!("efficacy: {}", if r.passed { "PASS" } else { "FAIL" });
+                r.passed
+            }
             "prompt" => {
                 let cfg = gate::load_config(root);
                 let cases_root = Path::new(env!("CARGO_MANIFEST_DIR"));
