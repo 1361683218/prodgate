@@ -405,3 +405,9 @@ history 原先只有 500 条上限，没有时间维度——每天扫一次留 
 延续红队审计，查"防线在 CI + git 权限"是否真实存在。结果：38 commit 全直推 master、0 PR、无分支保护——这道防线是空的。
 
 代码层补了两样声明：.github/CODEOWNERS（裁判文件需 owner review）、CI 加 Flag judge-file changes 步骤（改 tests/check.rs/mutation/cases/fixture/judge.sh/workflows 时打 warning）。但都是声明性不强制，需用户在 GitHub Settings 开分支保护 + require review from Code Owners 才生效。REDTEAM.md 补了具体操作步骤和"直推 master 全绿不代表可信"的警告。
+
+## 第 40 轮：分支保护启用后的 CI 修复
+
+用户开启 GitHub 分支保护后 CI 连续失败 5 次(exit 101)，本地 macOS 全过。排查：annotation 只说 exit 101 拿不到日志（需 admin）→ 拆步骤出现假绿灯（cmd | tee 吞掉真实失败）→ 加 pipefail 重现 → 让 CI 用 ::error:: annotation 自报失败输出 → 根因：项目有两个二进制，cargo run 在 CI 要求显式 --bin。加 --bin prodgate 后 CI 全绿。
+
+教训：本地 cargo 默默选默认二进制，CI 更严格；| tee 不加 pipefail 是假绿灯制造机——本项目存在的意义就是防假绿灯，结果自己 CI 栽了。REDTEAM.md 补完整排查记录。分支保护+CODEOWNERS+CI 全绿，攻击6防线从空变实。

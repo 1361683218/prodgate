@@ -77,3 +77,20 @@ Settings → Branches → Add branch ruleset for master
 做完之后：AI 直推 master 会被拒；改裁判文件的 PR 没有你 review 不能合。这才是攻击 6 的真防线。
 
 在此之前，记住一句话：**本地 `all` 全绿不代表代码可信，只代表当前这套（可能被改过的）裁判说它没问题**。
+
+## 分支保护启用后的 CI 修复（2026-11-27 14:54）
+
+用户开启分支保护后，CI 连续失败 5 次（exit 101）。本地 macOS 干净 target 全过，但 Ubuntu runner 挂。排查过程本身是个教训：
+
+1. 前两次失败 annotation 只说 "exit 101"，`::warning::` 显示我的 judge 步骤在工作
+2. 拆成独立命名步骤 → CI "通过"了，但那是**假绿灯**：`cmd | tee` 返回 tee 的 0，吞掉了真实失败
+3. 加 `set -o pipefail` → 真失败重现
+4. 让 CI 自报失败输出（`::error::` annotation）→ 定位到 `Full gate` 步骤
+5. 失败日志第一行揭示根因：**`cargo run` 有两个二进制（prodgate / prodgate-mcp），CI 的 cargo 要求显式 `--bin`**
+6. 加 `--bin prodgate` → CI 全绿
+
+**两个额外教训**：
+- 本地能跑 ≠ CI 能跑。本地 cargo 默默选了默认二进制，CI 版本更严格
+- `| tee` 不加 pipefail 是假绿灯制造机——这正是本项目存在的意义，结果在自己 CI 上栽了
+
+现在状态：分支保护已开、CODEOWNERS 已声明、CI 全绿、judge 文件变更会告警。红队报告里的攻击 6 防线从"空"变成"实"。
