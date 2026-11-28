@@ -427,3 +427,9 @@ CLI prodgate artifacts（文本+JSON）+ MCP tool。8 个测试（含 all 继承
 端到端跑通：AI 写码→声明 artifacts.tsv→七道门禁→COMPLETE，独立验证产物真实、judge PASS。
 
 但暴露语义漏洞：artifact 只验证"文件存在"，AI 可指向任意已存在文件蒙混。分析后没采用白名单（会破坏源码类产物正常流程），改为：禁止裁判文件作为产物（tests/workflows/check.rs/artifacts.tsv 自身等），REDTEAM.md 诚实记录边界——"本轮产出"的证明靠 git diff+CODEOWNERS，代码层做不到。新增 2 测试。129 测试、clippy 干净。
+
+## 第 43 轮：防线状态自检（早上"继续"）
+
+侦察发现昨晚用户说"点了"分支保护，但 rulesets API 显示 gate 规则集 enforcement=disabled——创建了没启用。CODEOWNERS 只是文本不强制，唯一生效防线是裁判文件物理隔离。
+
+新增 tools/check-defenses.sh 审计外部防线：规则集 active、CODEOWNERS 覆盖裁判文件、CI 跑完整门禁带 --bin、裁判文件不在 git。发现并修正一处误报（CI 用 set+e+显式 exit code 而非 pipefail，同样正确传播退出码）。当前 3 OK 1 FAIL（规则集 disabled）。REDTEAM.md 记录：防线状态本身必须可验证，"我点了"≠"生效了"。

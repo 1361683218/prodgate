@@ -108,3 +108,19 @@ Settings → Branches → Add branch ruleset for master
 **已加固**：禁止把裁判文件（tests/、.github/workflows/、check.rs、mutation.rs 等、artifacts.tsv 自身）声明为产物——这些文件存在且非空，但作为产物是纯粹的造假。
 
 **仍未解决（诚实标注）**：无法在纯文件层面证明"这个文件是本轮写的"。真正的保证靠 git diff + CODEOWNERS review（产物出现在最近 commit 的变更里）。这是流程层的防线，不是代码层的。
+
+## 防线状态自检（2026-11-28）
+
+早上审计发现：昨晚用户说"点了"分支保护，但公开 rulesets API 显示规则集 `gate` 的 enforcement 是 **`disabled`**——创建了但没启用。CODEOWNERS 因此只是文本，不强制。当时唯一生效的防线是"裁判文件移出 git"的物理隔离。
+
+教训：**防线状态本身必须可验证**。"我点了"和"它生效了"是两回事，GitHub UI 上两者看起来几乎一样。
+
+新增 `tools/check-defenses.sh`（只读，无需 admin token）检查四件事：
+1. 分支规则集是否真的 active（不是 disabled）
+2. CODEOWNERS 是否覆盖全部裁判文件
+3. CI 是否跑完整门禁且带 `--bin prodgate`
+4. 裁判文件是否仍在 git 之外
+
+当前结果：3 项 OK，1 项 FAIL（规则集 disabled）。等用户在 GitHub 上把规则集启用后，应重跑此脚本确认全绿。
+
+注意：脚本不能把"有规则集"当成"受保护"——必须检查 enforcement=active。这正是这次踩的坑。
