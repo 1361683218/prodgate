@@ -11,6 +11,9 @@
 # rulesets endpoint; CODEOWNERS/CI are checked against the local checkout.
 
 set -u
+# Anchor local file checks to the repository root, not the caller's cwd —
+# the script must work when invoked from anywhere.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="${GH_REPO:-1361683218/prodgate}"
 BASE="${GITHUB_API:-https://api.github.com}"
 fail=0
@@ -46,37 +49,37 @@ print("  OK      active ruleset(s): %s" % ", ".join(r["name"] for r in active))
 fi
 
 note "[2] CODEOWNERS covers judge files"
-if [ -f .github/CODEOWNERS ]; then
+if [ -f "$ROOT/.github/CODEOWNERS" ]; then
   missing=""
   for p in "tests/" "src/check.rs" "src/mutation.rs" "src/cases.rs" "src/fixture.rs" ".github/workflows/"; do
-    grep -qF "$p" .github/CODEOWNERS || missing="$missing $p"
+    grep -qF "$p" "$ROOT/.github/CODEOWNERS" || missing="$missing $p"
   done
   if [ -z "$missing" ]; then ok "all judge paths declared"; else bad "missing judge paths:$missing"; fi
 else
-  bad ".github/CODEOWNERS absent"
+  bad "$ROOT/.github/CODEOWNERS absent"
 fi
 
 note "[3] CI gate present"
-if [ -f .github/workflows/ci.yml ]; then
-  if grep -q "cargo run --locked --bin prodgate -- all" .github/workflows/ci.yml; then
+if [ -f "$ROOT/.github/workflows/ci.yml" ]; then
+  if grep -q "cargo run --locked --bin prodgate -- all" "$ROOT/.github/workflows/ci.yml"; then
     ok "CI runs the full gate with explicit --bin"
   else
     bad "CI does not run the full gate (or lacks --bin prodgate)"
   fi
   # Exit codes must be propagated. Either pipefail (for `cmd | tee`) or
   # explicit `code=$?` + `exit $code` (for redirected commands) is sound.
-  if grep -q "set -o pipefail" .github/workflows/ci.yml \
-     || { grep -q 'code=\$?' .github/workflows/ci.yml && grep -q 'exit \$code' .github/workflows/ci.yml; }; then
+  if grep -q "set -o pipefail" "$ROOT/.github/workflows/ci.yml" \
+     || { grep -q 'code=\$?' "$ROOT/.github/workflows/ci.yml" && grep -q 'exit \$code' "$ROOT/.github/workflows/ci.yml"; }; then
     ok "command failures are propagated (pipefail or explicit exit code)"
   else
     bad "CI may hide a failed command (no pipefail and no explicit exit code)"
   fi
 else
-  bad "CI workflow absent"
+  bad "$ROOT/.github/workflows/ci.yml absent"
 fi
 
 note "[4] Judge files stay out of git"
-tracked=$(git ls-files loop/judge.sh loop/PROMPT.md loop/run.sh 2>/dev/null || true)
+tracked=$(git -C "$ROOT" ls-files loop/judge.sh loop/PROMPT.md loop/run.sh 2>/dev/null || true)
 if [ -z "$tracked" ]; then
   ok "judge harness is human-held, not version-controlled"
 else
